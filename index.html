@@ -1835,6 +1835,20 @@ function App() {
     } catch (_) {}
   };
   const fbRef = React.useRef(null);
+  const writeBufferRef = React.useRef([]);
+  const queueWrite = (path, value) => {
+    try {
+      const fb = fbRef && fbRef.current;
+      if (fb) {
+        fb.set(fb.ref(path), value);
+        return true;
+      }
+    } catch(_){}
+    // buffer if not ready (or offline); will be flushed on setup/online
+    writeBufferRef.current.push({ path, value });
+    return false;
+  };
+
   const _remote = React.useRef({
     data: false,
     banner: false,
@@ -1886,6 +1900,14 @@ function App() {
       const fb = window.$fb;
       if (!fb) return;
       fbRef.current = fb;
+      // Flush any queued writes (in case user saved before Firebase listeners were ready)
+      try {
+        if (writeBufferRef && writeBufferRef.current && writeBufferRef.current.length) {
+          writeBufferRef.current.forEach(({path, value}) => fb.set(fb.ref(path), value));
+          writeBufferRef.current = [];
+        }
+      } catch(_){}
+
       fb.onValue(fb.ref('taif/data'), snap => {
         _hydrated.current.data = true;
         const v = snap.val();
@@ -2097,7 +2119,7 @@ function App() {
   }, [banner]);
   React.useEffect(() => {
     if (!fbRef.current) return;
-    if (!_hydrated.current.title) return;
+
     if (_remote.current.title) {
       _remote.current.title = false;
       return;
@@ -2106,7 +2128,7 @@ function App() {
   }, [title]);
   React.useEffect(() => {
     if (!fbRef.current) return;
-    if (!_hydrated.current.logo) return;
+
     if (_remote.current.logo) {
       _remote.current.logo = false;
       return;
@@ -2115,7 +2137,7 @@ function App() {
   }, [logo]);
   React.useEffect(() => {
     if (!fbRef.current) return;
-    if (!_hydrated.current.bannerImg) return;
+
     if (_remote.current.bannerImg) {
       _remote.current.bannerImg = false;
       return;
@@ -3048,6 +3070,24 @@ function App() {
       if (logoTmp) {} else {}
       setBannerImg(bannerImgTmp);
       if (bannerImgTmp) {} else {}
+      // Push immediately to RTDB (reliable sync) even if hydration hasn't returned yet.
+      try {
+        queueWrite('taif/title', safeTitle);
+        queueWrite('taif/logo', logoTmp || '');
+        queueWrite('taif/bannerImg', bannerImgTmp || '');
+        // Log branding change to adminActionsLog
+        const fb = fbRef && fbRef.current;
+        if (fb) {
+          const log = {
+            at: Date.now(),
+            actor: currentUser ? currentUser.username : 'unknown',
+            action: 'editLogo',
+            target: 'branding'
+          };
+          fb.set(fb.ref(`taif/adminActionsLog/${Date.now()}_${Math.random().toString(36).slice(2)}`), log);
+        }
+      } catch(_) {}
+
       setModal(null);
       setToast({
         text: "✅ تم حفظ التغييرات",
