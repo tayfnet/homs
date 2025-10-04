@@ -1225,13 +1225,6 @@ function App() {
   }, {
     key: 'manageUsers',
     label: '👤 إدارة المستخدمين'
-  }, {
-    // Permission to view the administration logs. This allows the logs button to be shown
-    // in the user management UI and the main settings menu. Without this permission,
-    // regular admins won't see the logs and superadmin/emergency roles will still have access
-    // because hasPermission() grants all privileges to them.
-    key: 'viewLogs',
-    label: '📜 سجل الإدارة'
   }];
   const permLabelMap = PERMISSIONS.reduce((acc, p) => {
     acc[p.key] = p.label;
@@ -2329,7 +2322,7 @@ function App() {
       });
       setAdminModalOpen(true);
     }
-  }, "\uD83D\uDC64 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646"), hasPermission('viewLogs') && React.createElement("button", {
+  }, "\uD83D\uDC64 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646"), currentUser && React.createElement("button", {
     type: "button",
     className: "btn-drawer",
     onClick: () => {
@@ -2425,6 +2418,19 @@ function App() {
         buy: toNum(usdTmp.buy),
         sell: toNum(usdTmp.sell)
       } : rr)));
+      // Log USD update action
+      try {
+        const fb = fbRef && fbRef.current;
+        if (fb) {
+          const log = {
+            at: Date.now(),
+            actor: currentUser ? currentUser.username : 'unknown',
+            action: 'editUSD',
+            target: 'USD'
+          };
+          fb.set(fb.ref(`taif/adminActionsLog/${Date.now()}_${Math.random().toString(36).slice(2)}`), log);
+        }
+      } catch (_) {}
       setModal(null);
       setToast({
         text: "✅ تم تحديث الدولار",
@@ -2615,6 +2621,19 @@ function App() {
         }
       }
       setData(sanitizeData(src));
+      // Log bulk edit action
+      try {
+        const fb = fbRef && fbRef.current;
+        if (fb) {
+          const log = {
+            at: Date.now(),
+            actor: currentUser ? currentUser.username : 'unknown',
+            action: 'bulkEdit',
+            target: 'all'
+          };
+          fb.set(fb.ref(`taif/adminActionsLog/${Date.now()}_${Math.random().toString(36).slice(2)}`), log);
+        }
+      } catch (_) {}
       setModal(null);
       setToast({
         text: "✅ تم تحديث كافة العملات",
@@ -2667,7 +2686,22 @@ function App() {
     className: "text-white bg-green-600 w-28 h-11",
     onClick: () => {
       if (editIdx != null) {
+        // Capture the code of the currency being deleted before removal
+        const removedCode = (Array.isArray(data) && data[editIdx] && data[editIdx].code) || '';
         setData(prev => prev.filter((_, i) => i !== editIdx));
+        // Log the deletion action to adminActionsLog
+        try {
+          const fb = fbRef && fbRef.current;
+          if (fb) {
+            const log = {
+              at: Date.now(),
+              actor: currentUser ? currentUser.username : 'unknown',
+              action: 'deleteCurrency',
+              target: removedCode
+            };
+            fb.set(fb.ref(`taif/adminActionsLog/${Date.now()}_${Math.random().toString(36).slice(2)}`), log);
+          }
+        } catch (_) {}
       }
       setModal(null);
       setToast({
@@ -3029,6 +3063,28 @@ function App() {
     editIdx: editIdx,
     onCancel: () => setModal(null),
     onSaved: list => {
+      // Determine if this was an edit or add operation based on editIdx
+      try {
+        const fb = fbRef && fbRef.current;
+        if (fb) {
+        const action = editIdx != null ? 'editCurrency' : 'addCurrency';
+          // Identify the currency code that was added or updated
+          let code = '';
+          if (editIdx != null) {
+            code = list && list[editIdx] && list[editIdx].code;
+          } else if (Array.isArray(list) && list.length) {
+            code = list[list.length - 1] && list[list.length - 1].code;
+          }
+          const log = {
+            at: Date.now(),
+            actor: currentUser ? currentUser.username : 'unknown',
+            action: action,
+            target: code || ''
+          };
+          fb.set(fb.ref(`taif/adminActionsLog/${Date.now()}_${Math.random().toString(36).slice(2)}`), log);
+        }
+      } catch (_) {}
+      // Persist the updated data
       setData(list);
       setModal(null);
     },
@@ -3162,13 +3218,10 @@ function App() {
     className: "grid gap-3"
   }, React.createElement("div", {
     className: "flex justify-between"
-  },
-    // Only show the logs button if the user has the `viewLogs` permission or is superadmin/emergency.
-    hasPermission('viewLogs') && React.createElement(Btn, {
-      className: "text-white bg-gray-600 w-36 h-10",
-      onClick: openLogs
-    }, "\uD83D\uDCDC \u0633\u062C\u0644\u0627\u062A \u0627\u0644\u0625\u062F\u0627\u0631\u0629"),
-    currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'emergency') && React.createElement(Btn, {
+  }, React.createElement(Btn, {
+    className: "text-white bg-gray-600 w-36 h-10",
+    onClick: openLogs
+  }, "\uD83D\uDCDC \u0633\u062C\u0644\u0627\u062A \u0627\u0644\u0625\u062F\u0627\u0631\u0629"), currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'emergency') && React.createElement(Btn, {
     className: "text-white bg-blue-600 w-36 h-10",
     onClick: openAddUser
   }, "\u2795 \u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062A\u062E\u062F\u0645")), React.createElement("div", {
