@@ -1781,7 +1781,7 @@ function App() {
   } catch (_) {
     pView = null;
   }
-  const [view, setView] = useState(pView || "cards");
+  const [view, setView] = useState(pView || "board");
   const [vTmp, setVTmp] = useState(view);
   useEffect(() => {
     try {
