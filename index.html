@@ -1225,6 +1225,13 @@ function App() {
   }, {
     key: 'manageUsers',
     label: '👤 إدارة المستخدمين'
+  }, {
+    // Permission to view the administration logs. This allows the logs button to be shown
+    // in the user management UI and the main settings menu. Without this permission,
+    // regular admins won't see the logs and superadmin/emergency roles will still have access
+    // because hasPermission() grants all privileges to them.
+    key: 'viewLogs',
+    label: '📜 سجل الإدارة'
   }];
   const permLabelMap = PERMISSIONS.reduce((acc, p) => {
     acc[p.key] = p.label;
@@ -2322,7 +2329,7 @@ function App() {
       });
       setAdminModalOpen(true);
     }
-  }, "\uD83D\uDC64 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646"), currentUser && React.createElement("button", {
+  }, "\uD83D\uDC64 \u0625\u062F\u0627\u0631\u0629 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646"), hasPermission('viewLogs') && React.createElement("button", {
     type: "button",
     className: "btn-drawer",
     onClick: () => {
@@ -3155,10 +3162,13 @@ function App() {
     className: "grid gap-3"
   }, React.createElement("div", {
     className: "flex justify-between"
-  }, React.createElement(Btn, {
-    className: "text-white bg-gray-600 w-36 h-10",
-    onClick: openLogs
-  }, "\uD83D\uDCDC \u0633\u062C\u0644\u0627\u062A \u0627\u0644\u0625\u062F\u0627\u0631\u0629"), currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'emergency') && React.createElement(Btn, {
+  },
+    // Only show the logs button if the user has the `viewLogs` permission or is superadmin/emergency.
+    hasPermission('viewLogs') && React.createElement(Btn, {
+      className: "text-white bg-gray-600 w-36 h-10",
+      onClick: openLogs
+    }, "\uD83D\uDCDC \u0633\u062C\u0644\u0627\u062A \u0627\u0644\u0625\u062F\u0627\u0631\u0629"),
+    currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'emergency') && React.createElement(Btn, {
     className: "text-white bg-blue-600 w-36 h-10",
     onClick: openAddUser
   }, "\u2795 \u0625\u0636\u0627\u0641\u0629 \u0645\u0633\u062A\u062E\u062F\u0645")), React.createElement("div", {
