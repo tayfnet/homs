@@ -1807,6 +1807,21 @@ function App() {
         };
         const key = editUserName || username;
         fb.set(fb.ref(`taif/users/${key}`), newUserData);
+    // ---- تحديث الكائن الموحد ليظهر المستخدم فورًا في شاشة الإدارة ----
+    try {
+      const rUnified = fb.ref('taif/users');
+      // قراءة لمرة واحدة ثم تحديث
+      const _once = (ref, cb) => {
+        const off = fb.onValue(ref, snap => { try { cb(snap); } finally { fb.off(ref); } });
+        return off;
+      };
+      _once(rUnified, snap => {
+        const curr = snap && typeof snap.val === 'function' ? (snap.val() || {}) : {};
+        const unified = { ...curr, [key]: newUserData };
+        fb.set(rUnified, unified);
+      });
+    } catch (_) {}
+
         try {
           const log = {
             at: Date.now(),
