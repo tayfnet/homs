@@ -1964,7 +1964,75 @@ function App() {
     return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
   };
   const [base, setBase] = useState(cachedApp?.base || {});
-  const [baseDate, setBaseDate] = useState(cachedApp?.baseDate || "");
+  
+  // === RT Step2: hook DO realtime events & open WS ===
+  useEffect(() => {
+    function applySnap(snap){
+      try{
+        if (snap && Array.isArray(snap.data)) setData(snap.data);
+        if (snap && snap.banner) setBanner(snap.banner);
+        if (snap && Object.prototype.hasOwnProperty.call(snap,'title')) setTitle(snap.title || "");
+        if (snap && Object.prototype.hasOwnProperty.call(snap,'logo')) setLogo(snap.logo || "");
+        if (snap && Object.prototype.hasOwnProperty.call(snap,'bannerImg')) setBannerImg(snap.bannerImg || "");
+        if (snap && snap.datetime) setDT(prev => ({ ...prev, ...snap.datetime }));
+        if (snap && snap.base){
+          try{
+            if (snap.base.base) setBase(snap.base.base);
+            else setBase(snap.base);
+            if (snap.base.date) setBaseDate(snap.base.date);
+          }catch(_){}
+        }
+      }catch(e){ console.warn('[RT] snap apply error', e); }
+    }
+    function applyDelta(delta){
+      try{
+        if (delta && Array.isArray(delta.data)) setData(delta.data);
+        if (delta && delta.banner) setBanner(delta.banner);
+        if (delta && Object.prototype.hasOwnProperty.call(delta,'title')) setTitle(delta.title || "");
+        if (delta && Object.prototype.hasOwnProperty.call(delta,'logo')) setLogo(delta.logo || "");
+        if (delta && Object.prototype.hasOwnProperty.call(delta,'bannerImg')) setBannerImg(delta.bannerImg || "");
+        if (delta && delta.datetime) setDT(prev => ({ ...prev, ...delta.datetime }));
+        if (delta && delta.base){
+          try{
+            if (delta.base.base) setBase(delta.base.base);
+            else setBase(delta.base);
+            if (delta.base.date) setBaseDate(delta.base.date);
+          }catch(_){}
+        }
+      }catch(e){ console.warn('[RT] delta apply error', e); }
+    }
+    const onSnap = (e)=> applySnap((e && e.detail) || {});
+    const onUpd  = (e)=> applyDelta((e && e.detail) || {});
+    window.addEventListener('rt:snapshot', onSnap);
+    window.addEventListener('rt:update', onUpd);
+
+    // Open WS directly if available (fallback if external injector not present)
+    try{
+      const base = (window.DO_RT || 'https://taif-realtime.mhmadsayfzaim.workers.dev');
+      const token = (window.DO_TOKEN || 'Taif-Api-2025-Prod-Secret');
+      const url = base.replace('https','wss') + '/ws?token=' + encodeURIComponent(token);
+      const ws = new WebSocket(url);
+      ws.onmessage = (e)=> {
+        try{
+          const msg = JSON.parse(e.data || '{}');
+          if (msg && msg.type === 'snapshot:init') applySnap(msg.payload||{});
+          if (msg && msg.type === 'snapshot:update') applyDelta(msg.payload||{});
+        }catch(_){}
+      };
+      ws.onclose = ()=> setTimeout(()=>{ try{
+        const ws2 = new WebSocket(url);
+        ws2.onmessage = ws.onmessage;
+        ws2.onclose = ws.onclose;
+      }catch(_){}
+      }, 2000);
+    }catch(_){}
+
+    return () => {
+      window.removeEventListener('rt:snapshot', onSnap);
+      window.removeEventListener('rt:update', onUpd);
+    };
+  }, []);
+const [baseDate, setBaseDate] = useState(cachedApp?.baseDate || "");
   const baseRef = useRef(base);
   useEffect(() => {
     baseRef.current = base;
@@ -4031,49 +4099,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
     document.addEventListener('DOMContentLoaded', __start__);
   } else {
     __start__();
-  }
-})();
-</script>
-
-
-<!-- === Realtime (Step 1) — WS listener only (no other changes) === -->
-<script>
-/* RT Step1: WS listener injected */
-window.DO_RT = window.DO_RT || 'https://taif-realtime.mhmadsayfzaim.workers.dev';
-window.DO_TOKEN = window.DO_TOKEN || 'Taif-Api-2025-Prod-Secret';
-
-(function () {
-  function openWS() {
-    try {
-      const base = String(window.DO_RT || '').trim();
-      if (!base) return setTimeout(openWS, 2000);
-      const url = base.replace('https','wss') + '/ws?token=' + encodeURIComponent(window.DO_TOKEN || '');
-      const ws  = new WebSocket(url);
-
-      ws.onopen = function() { console.log('[RT] WS OPEN'); };
-
-      ws.onmessage = function(e) {
-        try {
-          const msg = JSON.parse(e.data || '{}');
-          if (msg && msg.type === 'snapshot:init') {
-            window.dispatchEvent(new CustomEvent('rt:snapshot', { detail: msg.payload || {} }));
-          }
-          if (msg && msg.type === 'snapshot:update') {
-            window.dispatchEvent(new CustomEvent('rt:update', { detail: msg.payload || {} }));
-          }
-        } catch (_err) {}
-      };
-
-      ws.onerror = function(err) { console.warn('[RT] WS ERR', err); };
-      ws.onclose = function() { console.warn('[RT] WS CLOSED — reconnect in 2000ms'); setTimeout(openWS, 2000); };
-    } catch (_e) {
-      setTimeout(openWS, 4000);
-    }
-  }
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(openWS, 0);
-  } else {
-    window.addEventListener('load', openWS);
   }
 })();
 </script>
