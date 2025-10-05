@@ -1525,7 +1525,7 @@ try {
   if (bcryptObj && typeof bcryptObj.compareSync === "function") {
     same = bcryptObj.compareSync(loginPass, hash);
   } else if (bcryptObj && typeof bcryptObj.compare === "function") {
-    // fallback async
+    // fallback async (للتوافق فقط)
     bcryptObj.compare(loginPass, hash, function (err, res) {
       same = !err && !!res;
     });
@@ -1534,11 +1534,12 @@ try {
   same = false;
 }
 
-
 if (!same) {
   setLoginErr('⚠️ كلمة المرور غير صحيحة');
   setLoading(false);
-  try{ clearTimeout(__loginTimeout);}catch(e){}
+  try {
+    clearTimeout(__loginTimeout);
+  } catch (e) {}
   return;
 }
 
