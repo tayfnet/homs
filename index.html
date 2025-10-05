@@ -91,58 +91,40 @@ color-scheme:light;--firstcol-pr:32px}*{box-sizing:border-box}html,body{height:1
 }
 </style>
 </head><body id="body" class="min-h-screen text-gray-900"><div id="bgfix" class="bg-fixed-gradient bg-gradient-to-tr from-cyan-200 via-white to-cyan-200"></div><div id="root"></div><script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script><script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script>
-  // === Cloudflare D1 Adapter (بديل Firebase) ===
-  const API = "https://my-api.mhmadsayfzaim.workers.dev";
-  (function(){
-    const listeners = new Map();
-    const cache = new Map();
-    function normKey(path){ return String(path || "").replace(/^\/+|\/+$/g, ""); }
-    async function get(key){
-      try {
-        const res = await fetch(API + "/kv?key=" + encodeURIComponent(key));
-        if (!res.ok) return null;
-        const json = await res.json();
-        cache.set(key, json);
-        return json;
-      } catch { return cache.get(key) ?? null; }
-    }
-    async function put(key, value){
-      cache.set(key, value);
-      await fetch(API + "/kv", { method: "PUT", headers: { "Content-Type":"application/json" }, body: JSON.stringify({ key, value }) });
-    }
-    async function patch(key, value){
-      const oldVal = cache.has(key) ? cache.get(key) : await get(key);
-      const isObj = v => v && typeof v === "object" && !Array.isArray(v);
-      function deepMerge(a,b){ if(isObj(a)&&isObj(b)){ const o={...a}; for(const k in b) o[k]=k in o?deepMerge(a[k],b[k]):b[k]; return o; } return b; }
-      const merged = (isObj(oldVal) && isObj(value)) ? deepMerge(oldVal, value) : value;
-      cache.set(key, merged);
-      // When applying partial updates, send the merged value to the backend
-      // to avoid losing existing properties on the object. Otherwise the backend
-      // may overwrite the entire record with only the provided fields.
-      await fetch(API + "/kv", {
-        method: "PATCH",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify({ key, value: merged })
-      });
-    }
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+  import { getDatabase, ref, set, update, onValue, off, onDisconnect } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+  // import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js"; // optional
+  // === Firebase: tayf57-43a0e ===
+  const firebaseConfig = {
+    apiKey: "AIzaSyAy1fBKfvoC8DYQwPjsyoe_nulZCWUaJgk",
+    authDomain: "tayf57-43a0e.firebaseapp.com",
+    databaseURL: "https://tayf57-43a0e-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "tayf57-43a0e",
+    storageBucket: "tayf57-43a0e.firebasestorage.app",
+    messagingSenderId: "494354176815",
+    appId: "1:494354176815:web:a938b526fad720287fdfda",
+    measurementId: "G-8REGK4QRKN"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db  = getDatabase(app);
+  const auth = getAuth(app);
+  window.auth = auth; window.db = db; window.firebaseApp = app;
+  // 1) Sign-in anonymously (required for write access per rules)
+  try{ await signInAnonymously(auth); }catch(e){ console.error("Anon sign-in error", e); }
+  // 2) Expose unified API only after auth is ready (read works either way)
+  onAuthStateChanged(auth, () => {
     window.$fb = {
-      ref: (path) => normKey(path),
-      set: (r, v) => put(r, v),
-      update: (r, v) => patch(r, v),
-      onValue: (r, cb, pollMs = 3000) => {
-        const key = normKey(r);
-        get(key).then(val => cb({ val: () => val }));
-        const id = setInterval(async () => { const val = await get(key); cb({ val: () => val }); }, pollMs);
-        listeners.set(key, id);
-        return () => { clearInterval(id); listeners.delete(key); };
-      },
-      off: (r) => { const key = normKey(r); const id = listeners.get(key); if (id) { clearInterval(id); listeners.delete(key); } },
-      onDisconnect: () => ({ update: async () => {} })
+      ref: (path) => ref(db, path),
+      set: (r, v) => set(r, v),
+      update: (r, v) => update(r, v),
+      onValue: (r, cb) => onValue(r, cb),
+      off: (r) => off(r),
+      onDisconnect: (r) => onDisconnect(r)
     };
-    // جاهز
     window.dispatchEvent(new Event('fb-ready'));
-  })();
+  });
 </script>
 
 <script>
@@ -214,7 +196,7 @@ const useFocusTrap = (enabled, containerRef) => {
     return () => document.removeEventListener('keydown', onKey);
   }, [enabled, containerRef]);
 };
-const APP_VERSION = "1.3.3.3";
+const APP_VERSION = "1.3.3.4";
 const K = Object.freeze({
   DATA: "taif:data",
   BANNER: "taif:banner:v2",
