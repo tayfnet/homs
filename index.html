@@ -214,7 +214,7 @@ const useFocusTrap = (enabled, containerRef) => {
     return () => document.removeEventListener('keydown', onKey);
   }, [enabled, containerRef]);
 };
-const APP_VERSION = "1.3.3.5";
+const APP_VERSION = "1.4.4.6";
 const K = Object.freeze({
   DATA: "taif:data",
   BANNER: "taif:banner:v2",
@@ -1964,75 +1964,7 @@ function App() {
     return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
   };
   const [base, setBase] = useState(cachedApp?.base || {});
-  
-  // === RT Step2: hook DO realtime events & open WS ===
-  useEffect(() => {
-    function applySnap(snap){
-      try{
-        if (snap && Array.isArray(snap.data)) setData(snap.data);
-        if (snap && snap.banner) setBanner(snap.banner);
-        if (snap && Object.prototype.hasOwnProperty.call(snap,'title')) setTitle(snap.title || "");
-        if (snap && Object.prototype.hasOwnProperty.call(snap,'logo')) setLogo(snap.logo || "");
-        if (snap && Object.prototype.hasOwnProperty.call(snap,'bannerImg')) setBannerImg(snap.bannerImg || "");
-        if (snap && snap.datetime) setDT(prev => ({ ...prev, ...snap.datetime }));
-        if (snap && snap.base){
-          try{
-            if (snap.base.base) setBase(snap.base.base);
-            else setBase(snap.base);
-            if (snap.base.date) setBaseDate(snap.base.date);
-          }catch(_){}
-        }
-      }catch(e){ console.warn('[RT] snap apply error', e); }
-    }
-    function applyDelta(delta){
-      try{
-        if (delta && Array.isArray(delta.data)) setData(delta.data);
-        if (delta && delta.banner) setBanner(delta.banner);
-        if (delta && Object.prototype.hasOwnProperty.call(delta,'title')) setTitle(delta.title || "");
-        if (delta && Object.prototype.hasOwnProperty.call(delta,'logo')) setLogo(delta.logo || "");
-        if (delta && Object.prototype.hasOwnProperty.call(delta,'bannerImg')) setBannerImg(delta.bannerImg || "");
-        if (delta && delta.datetime) setDT(prev => ({ ...prev, ...delta.datetime }));
-        if (delta && delta.base){
-          try{
-            if (delta.base.base) setBase(delta.base.base);
-            else setBase(delta.base);
-            if (delta.base.date) setBaseDate(delta.base.date);
-          }catch(_){}
-        }
-      }catch(e){ console.warn('[RT] delta apply error', e); }
-    }
-    const onSnap = (e)=> applySnap((e && e.detail) || {});
-    const onUpd  = (e)=> applyDelta((e && e.detail) || {});
-    window.addEventListener('rt:snapshot', onSnap);
-    window.addEventListener('rt:update', onUpd);
-
-    // Open WS directly if available (fallback if external injector not present)
-    try{
-      const base = (window.DO_RT || 'https://taif-realtime.mhmadsayfzaim.workers.dev');
-      const token = (window.DO_TOKEN || 'Taif-Api-2025-Prod-Secret');
-      const url = base.replace('https','wss') + '/ws?token=' + encodeURIComponent(token);
-      const ws = new WebSocket(url);
-      ws.onmessage = (e)=> {
-        try{
-          const msg = JSON.parse(e.data || '{}');
-          if (msg && msg.type === 'snapshot:init') applySnap(msg.payload||{});
-          if (msg && msg.type === 'snapshot:update') applyDelta(msg.payload||{});
-        }catch(_){}
-      };
-      ws.onclose = ()=> setTimeout(()=>{ try{
-        const ws2 = new WebSocket(url);
-        ws2.onmessage = ws.onmessage;
-        ws2.onclose = ws.onclose;
-      }catch(_){}
-      }, 2000);
-    }catch(_){}
-
-    return () => {
-      window.removeEventListener('rt:snapshot', onSnap);
-      window.removeEventListener('rt:update', onUpd);
-    };
-  }, []);
-const [baseDate, setBaseDate] = useState(cachedApp?.baseDate || "");
+  const [baseDate, setBaseDate] = useState(cachedApp?.baseDate || "");
   const baseRef = useRef(base);
   useEffect(() => {
     baseRef.current = base;
@@ -2359,13 +2291,37 @@ let pView;
         _hydrated.current.data = true;
         const v = snap.val();
         if (v && Array.isArray(v)) {
+          // Deduplicate and sort by currency code to ensure stable ordering.
+          let cleanArr = [];
+          try {
+            const seen = new Set();
+            for (const item of v) {
+              const code = item && item.code;
+              if (code && !seen.has(code)) {
+                seen.add(code);
+                cleanArr.push(item);
+              }
+            }
+            cleanArr.sort((a,b) => {
+              if (!a || !b) return 0;
+              return (String(a.code||'')).localeCompare(String(b.code||''));
+            });
+          } catch(_) { cleanArr = v; }
+          // Avoid re-rendering on identical payloads by comparing with the current data.
+          try {
+            const current = (dataRef && dataRef.current) ? dataRef.current : data;
+            const sortedCurrent = Array.isArray(current) ? [...current].sort((a,b) => (String(a.code||'')).localeCompare(String(b.code||''))) : current;
+            if (JSON.stringify(cleanArr) === JSON.stringify(sortedCurrent)) {
+              return;
+            }
+          } catch(_) {}
           _remote.current.data = true;
-          setData(v);
+          setData(cleanArr);
           saveSnapshot({
-            data: v
+            data: cleanArr
           });
           saveJSON(K.DATA, {
-            data: v
+            data: cleanArr
           });
         } else {
           fb.set(fb.ref('taif/data'), DEFAULT_DATA);
@@ -2487,6 +2443,14 @@ let pView;
         const remoteDate = v.date;
         const localDate = baseDateRef.current;
         hasRemoteBase.current = true;
+        // Avoid applying the same base multiple times; skip update if both date and values match the current base.
+        try {
+          const currentBaseVals = baseRef.current || {};
+          const sameVals = Object.keys(cleaned).length === Object.keys(currentBaseVals).length && Object.keys(cleaned).every(k => cleaned[k] === currentBaseVals[k]);
+          if (sameVals && localDate === remoteDate) {
+            return;
+          }
+        } catch(_) {}
         if (!localDate || localDate !== remoteDate) {
           _remote.current.base = true;
           setBase(cleaned);
@@ -4100,6 +4064,61 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
   } else {
     __start__();
   }
+})();
+</script>
+
+
+<!-- === Realtime (Step 3) — dual-write patch for saves to KV === -->
+<script>
+/* RT Step3: dual-write patch */
+(function(){
+  try {
+    const BASE  = window.DO_RT || (window.DO && window.DO.RT) || 'https://taif-realtime.mhmadsayfzaim.workers.dev';
+    const TOKEN = window.DO_TOKEN || (window.DO && window.DO.TOKEN) || 'Taif-Api-2025-Prod-Secret';
+    const hdr   = { 'Content-Type':'application/json', Authorization: `Bearer ${TOKEN}` };
+
+    async function sendDelta(delta) {
+      try { await fetch(`${BASE}/update`, { method:'PUT', headers: hdr, body: JSON.stringify(delta||{}) }); }
+      catch(_e){ /* silent */ }
+    }
+
+    function mapDelta(key, value) {
+      switch(String(key||'')) {
+        case 'taif/data':       return { data: value };
+        case 'taif/banner':     return { banner: value };
+        case 'taif/title':      return { title: value };
+        case 'taif/logo':       return { logo: value };
+        case 'taif/bannerImg':  return { bannerImg: value };
+        case 'taif/datetime':   return { datetime: value };
+        case 'taif/base':       return { base: value };
+        default: return null;
+      }
+    }
+
+    // Patch window.api.set if موجود
+    if (window.api && typeof window.api.set === 'function') {
+      const _origSet = window.api.set.bind(window.api);
+      window.api.set = async function(key, value) {
+        const res = await _origSet(key, value);
+        try { const delta = mapDelta(key, value); if (delta) sendDelta(delta); } catch(_){}
+        return res;
+      };
+    }
+
+    // Patch $fb.set إذا الواجهة تستخدمه
+    if (window.$fb && typeof window.$fb.set === 'function' && typeof window.$fb.ref === 'function') {
+      const _origFbSet = window.$fb.set.bind(window.$fb);
+      window.$fb.set = async function(refObj, value) {
+        const res = await _origFbSet(refObj, value);
+        try {
+          const key = (typeof refObj === 'string') ? refObj : (refObj && refObj.path) || (refObj && refObj._path) || String(refObj||'');
+          const delta = mapDelta(key, value);
+          if (delta) sendDelta(delta);
+        } catch(_){}
+        return res;
+      };
+    }
+  } catch(_e) { /* ignore */ }
 })();
 </script>
 
