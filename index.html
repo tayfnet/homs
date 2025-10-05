@@ -1519,70 +1519,28 @@ function App() {
       try{ clearTimeout(__loginTimeout);}catch(e){}
       return;
           }
-          bcryptObj.compare(loginPass, hash, function (err, same) {
-            if (err || !same) {
-              setLoginErr('⚠️ كلمة المرور غير صحيحة');
-      setLoading(false);
-      try{ clearTimeout(__loginTimeout);}catch(e){}
-      return;
-            }
-              // Deny access if the account is banned
-              if (obj && obj.banned) {
-                setLoginErr('⚠️ تم حظر هذا المستخدم من الوصول');
-      setLoading(false);
-      try{ clearTimeout(__loginTimeout);}catch(e){}
-      return;
-              }
-            // Determine permissions for this user
-            let perms = [];
-            if (Array.isArray(obj.permissions)) perms = obj.permissions; else if (obj.permissions && typeof obj.permissions === 'object') {
-              perms = Object.keys(obj.permissions).filter(k => obj.permissions[k]);
-            }
-            // Generate a unique session ID for this login attempt
-            const sid = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-            // Collect basic device information for auditing purposes
-            let deviceInfo = '';
-            try {
-              const nav = typeof navigator !== 'undefined' ? navigator : {};
-              const ua = nav.userAgent || '';
-              const platform = nav.platform || '';
-              const lang = nav.language || '';
-              deviceInfo = `${ua} | ${platform} | ${lang}`;
-            } catch (_) {
-              deviceInfo = '';
-            }
-            const sessObj = {
-              username: loginUser,
-              role: obj.role || '',
-              permissions: perms,
-              sessionId: sid,
-              deviceInfo: deviceInfo,
-              online: true,
-              lastActive: Date.now(),
-              authUid: (window.auth && window.auth.currentUser && window.auth && window.auth.currentUser.uid) || null,
-              banned: !!obj.banned
-            };
-            // Reference to the user's session in the database
-            const sessRef = fb.ref(`taif/sessions/${loginUser}`);
-            // Check for an existing session; if exists with a different sessionId and still online, block login
-            const unsubSess = fb.onValue(sessRef, snap2 => {
-              const existing = snap2.val();
-              // Stop listening after first read
-              if (unsubSess) fb.off(sessRef);
-              if (existing && typeof existing === 'object' && existing.sessionId && existing.sessionId !== sid && existing.online && !(existing.lastActive && (Date.now() - existing.lastActive > SESSION_TTL_MS))) {
-                // Deny login when another device is logged in
-                setLoginErr('⚠️ الحساب مسجل الدخول بالفعل على جهاز آخر. يرجى تسجيل الخروج أولاً.');
-      setLoading(false);
-      try{ clearTimeout(__loginTimeout);}catch(e){}
-      return;
-              }
-              try {
-                // Store the full session object in the database to lock this user to a single device and record device info
-                fb.set(sessRef, sessObj);
-              try {
-                const uid = (window.auth && window.auth.currentUser && window.auth && window.auth.currentUser.uid) || null;
-                if (uid) {
-                  const permsObj = Array.isArray(perms) ? perms.reduce((acc, k) => (acc[k] = true, acc), {}) : (perms || {});
+          
+let same = false;
+try {
+  if (bcryptObj && typeof bcryptObj.compareSync === "function") {
+    same = bcryptObj.compareSync(loginPass, hash);
+  } else if (bcryptObj && typeof bcryptObj.compare === "function") {
+    // fallback async
+    bcryptObj.compare(loginPass, hash, function (err, res) {
+      same = !err && !!res;
+    });
+  }
+} catch (e) {
+  same = false;
+}
+
+if (!same) {
+  setLoginErr('⚠️ كلمة المرور غير صحيحة');
+  setLoading(false);
+  try{ clearTimeout(__loginTimeout);}catch(e){}
+  return;
+}
+
                   fb.set(fb.ref(`taif/uids/${uid}`), { username: loginUser, role: obj.role || '', permissions: permsObj });
                 }
               } catch (_) {}
