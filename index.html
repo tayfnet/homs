@@ -92,39 +92,57 @@ color-scheme:light;--firstcol-pr:32px}*{box-sizing:border-box}html,body{height:1
 </style>
 </head><body id="body" class="min-h-screen text-gray-900"><div id="bgfix" class="bg-fixed-gradient bg-gradient-to-tr from-cyan-200 via-white to-cyan-200"></div><div id="root"></div><script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script><script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-  import { getDatabase, ref, set, update, onValue, off, onDisconnect } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-  // import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js"; // optional
-  // === Firebase: tayf57-43a0e ===
-  const firebaseConfig = {
-    apiKey: "AIzaSyAy1fBKfvoC8DYQwPjsyoe_nulZCWUaJgk",
-    authDomain: "tayf57-43a0e.firebaseapp.com",
-    databaseURL: "https://tayf57-43a0e-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "tayf57-43a0e",
-    storageBucket: "tayf57-43a0e.firebasestorage.app",
-    messagingSenderId: "494354176815",
-    appId: "1:494354176815:web:a938b526fad720287fdfda",
-    measurementId: "G-8REGK4QRKN"
+  // === محول قاعدة البيانات: Cloudflare KV Worker (emulates $fb) ===
+  const API_BASE  = 'https://taif-api.mhmadsayfzaim.workers.dev';
+  const API_TOKEN = 'Taif-Api-2025-Prod-Secret'; // ⚠️ غيّرها لقيمة API_TOKEN في العامل
+  const HEADERS   = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_TOKEN}` };
+  const _GET = async (key) => {
+    const res = await fetch(`${API_BASE}/?key=${encodeURIComponent(key)}`, { method: 'GET', headers: { 'Authorization': `Bearer ${API_TOKEN}` } });
+    if (!res.ok) throw new Error('GET ' + key + ' -> ' + res.status);
+    try { return await res.json(); } catch { return null; }
   };
-  const app = initializeApp(firebaseConfig);
-  const db  = getDatabase(app);
-  const auth = getAuth(app);
-  window.auth = auth; window.db = db; window.firebaseApp = app;
-  // 1) Sign-in anonymously (required for write access per rules)
-  try{ await signInAnonymously(auth); }catch(e){ console.error("Anon sign-in error", e); }
-  // 2) Expose unified API only after auth is ready (read works either way)
-  onAuthStateChanged(auth, () => {
-    window.$fb = {
-      ref: (path) => ref(db, path),
-      set: (r, v) => set(r, v),
-      update: (r, v) => update(r, v),
-      onValue: (r, cb) => onValue(r, cb),
-      off: (r) => off(r),
-      onDisconnect: (r) => onDisconnect(r)
-    };
-    window.dispatchEvent(new Event('fb-ready'));
-  });
+  const _SET = async (key, value) => {
+    const res = await fetch(`${API_BASE}/`, {
+      method: 'PUT', headers: HEADERS,
+      body: JSON.stringify({ key, value })
+    });
+    if (!res.ok) throw new Error('PUT ' + key + ' -> ' + res.status);
+    return res.json().catch(()=>({ok:true}));
+  };
+  const _PATCH = async (key, value) => {
+    const res = await fetch(`${API_BASE}/`, {
+      method: 'PATCH', headers: HEADERS,
+      body: JSON.stringify({ key, value })
+    });
+    if (!res.ok) throw new Error('PATCH ' + key + ' -> ' + res.status);
+    return res.json().catch(()=>({ok:true}));
+  };
+  const _DEL = async (key) => {
+    const res = await fetch(`${API_BASE}/`, {
+      method: 'DELETE', headers: HEADERS,
+      body: JSON.stringify({ key })
+    });
+    if (!res.ok) throw new Error('DELETE ' + key + ' -> ' + res.status);
+    return res.json().catch(()=>({ok:true}));
+  };
+
+  // === $fb shim ===
+  const listeners = new Map();
+  window.$fb = {
+    ref: (path) => path,
+    set: async (r, v) => _SET(r, v),
+    update: async (r, v) => _PATCH(r, v),
+    onValue: (r, cb) => {
+      const wrap = (val) => ({ val: () => val });
+      _GET(r).then((val)=> cb(wrap(val))).catch(()=> cb(wrap(null)));
+      const id = Math.random().toString(36).slice(2);
+      listeners.set(id, true);
+      return () => listeners.delete(id);
+    },
+    off: (_r) => {},
+    onDisconnect: (_r) => ({ update: async (_obj)=>{} })
+  };
+  window.dispatchEvent(new Event('fb-ready'));
 </script>
 
 <script>
@@ -196,7 +214,7 @@ const useFocusTrap = (enabled, containerRef) => {
     return () => document.removeEventListener('keydown', onKey);
   }, [enabled, containerRef]);
 };
-const APP_VERSION = "1.3.3.4";
+const APP_VERSION = "1.3.3.5";
 const K = Object.freeze({
   DATA: "taif:data",
   BANNER: "taif:banner:v2",
@@ -1063,34 +1081,40 @@ function App() {
     prevConnType.current = connType;
   }, [connType]);
   useEffect(() => {
-    try {
-      const stored = StorageManager.load();
-      if (!stored) {
-        StorageManager.save({
-          version: APP_VERSION
-        });
-      } else if (stored.version !== APP_VERSION) {
-        StorageManager.save({
-          version: APP_VERSION
-        });
-        setToast({
-          text: "ℹ️ جاري تحميل البيانات الجديدة...",
-          type: "info"
-        });
-        const unsub = window.$fb?.onValue(window.$fb.ref('taif/data'), snap => {
-          if (snap.val()) {
-            setToast({
-              text: "✅ تم تحديث البيانات",
-              type: "success"
-            });
-            if (unsub) window.$fb.off(window.$fb.ref('taif/data'));
-          }
-        });
-      }
-    } catch (e) {
-      console.error("Version check error", e);
+  try {
+    // ✅ تحقق ثابت يعتمد على localStorage — مرة واحدة لكل إصدار
+    const VER_KEY = 'taif:lastVersion';
+    const last = (typeof localStorage!=='undefined') ? localStorage.getItem(VER_KEY) : null;
+    if (!last) {
+      // أول تشغيل أو بعد مسح المتصفح: فقط سجل الإصدار الحالي
+      try { localStorage.setItem(VER_KEY, APP_VERSION); } catch(_) {}
+    } else if (last !== APP_VERSION) {
+      // 🧹 إعادة تهيئة كاملة للنظام عند اختلاف رقم الإصدار
+      try { localStorage.clear(); } catch (_) {}
+      try { sessionStorage.clear(); } catch (_) {}
+      try {
+        if (window.indexedDB && indexedDB.databases) {
+          indexedDB.databases().then(list => {
+            try { (list || []).forEach(db => { try { if (db && db.name) indexedDB.deleteDatabase(db.name); } catch(_) {} }); } catch(_) {}
+          });
+        }
+      } catch (_) {}
+      try { localStorage.setItem(VER_KEY, APP_VERSION); } catch(_) {}
+
+      setToast({ text: "🧹 تم تحديث النظام — تم مسح الذاكرة القديمة بالكامل", type: "info" });
+
+      // إعادة المزامنة من Firebase: ننتظر أول Snapshot ثم نظهر نجاح التحميل
+      const unsub = window.$fb?.onValue(window.$fb.ref('taif/data'), (snap) => {
+        if (snap && snap.val()) {
+          setToast({ text: "✅ تم تحميل البيانات الجديدة بنجاح", type: "success" });
+          if (unsub) window.$fb.off(window.$fb.ref('taif/data'));
+        }
+      });
     }
-  }, []);
+  } catch(e) {
+    console.error("Version check error", e);
+  }
+}, []);
   const p = readJSON(K.DATA, null),
     pBanner = readJSON(K.BANNER, null),
     pDT = readJSON(K.DT, null);
@@ -1476,12 +1500,16 @@ function App() {
       setLoading(false); try{ clearTimeout(__loginTimeout);}catch(e){} return;
     }
     try {
-      if (!window.$fb) {
-        setLoginErr('⏳ يرجى الانتظار، جاري الاتصال بقاعدة البيانات...');
-      setLoading(false);
+      
+    if (!window.$fb) {
+      setLoginErr('⏳ يرجى الانتظار، جاري الاتصال بقاعدة البيانات... سيتم المحاولة تلقائيًا.');
+      // انتظر fb-ready ثم أعد المحاولة تلقائيًا بنفس المدخلات
+      const retry = () => { try { document.removeEventListener('fb-ready', retry); } catch(_) {} handleLogin(); };
+      try { document.addEventListener('fb-ready', retry, { once: true }); } catch(_) { window.addEventListener('fb-ready', retry, { once: true }); }
       try{ clearTimeout(__loginTimeout);}catch(e){}
       return;
-      }
+    }
+    
       const fb = fbRef.current;
       if (!fb) {
         setLoginErr('⚠️ لا يمكن الوصول لقاعدة البيانات');
@@ -1582,6 +1610,7 @@ function App() {
               } catch (_) {}
               // Update state and UI
               setCurrentUser(sessObj);
+              setAuthVerified(true);
               setLoginModalOpen(false);
               setLoginUser('');
               setLoginPass('');
@@ -2019,7 +2048,7 @@ function App() {
     return !cw || !iw ? 0 : w === 'right' ? cw / 2 + iw / 2 + p : w === 'left' ? -(cw / 2 + iw / 2) - p : 0;
   };
   const startAd = useCallback(() => {
-    if (!banner.texts.length) return;
+    if (!banner || !Array.isArray(banner.texts) || !banner.texts.length) return;
     clearT();
     setAd(v => ({
       ...v,
@@ -2100,85 +2129,12 @@ function App() {
     setModal("usd");
   };
   // === Watchers: enforce single session and live updates to user record ===
-  useEffect(() => {
-    // Only set up listeners for a logged in user with a session ID
-    if (!currentUser || !currentUser.username || !currentUser.sessionId) return;
-    const fb = fbRef.current;
-    if (!fb) return;
-    const sessPath = `taif/sessions/${currentUser.username}`;
-    const userPath = `taif/users/${currentUser.username}`;
-    const sessRef = fb.ref(sessPath);
-    const userRef = fb.ref(userPath);
-    // removed: ignoreSessInit
-    // removed: ignoreUserInit
-    // Listener for session changes; sign out if session removed, mismatched or marked offline
-    const unsubSess = fb.onValue(sessRef, snap => {
-      const val = snap.val();
-            const sessionId = val && typeof val === 'object' ? val.sessionId : val;
-      const onlineFlag = val && typeof val === 'object' ? val.online : true;
-      if (!val || !sessionId || sessionId !== currentUser.sessionId || onlineFlag === false) {
-        setToast({
-          text: '⚠️ تم تسجيل دخولك من جهاز آخر أو انتهت جلستك. سيتم تسجيل خروجك.',
-          type: 'error'
-        });
-        handleLogout(true);
-      }
-    });
-    // Listener for user record changes; update role/permissions/banned or sign out on deletion
-    const unsubUser = fb.onValue(userRef, snap => {
-      const obj = snap.val();
-            if (!obj) {
-        setToast({
-          text: '⚠️ تم حذف حسابك بواسطة الإدارة، سيتم تسجيل خروجك.',
-          type: 'error'
-        });
-        handleLogout(true);
-        return;
-      }
-      // Normalize permissions
-      let newPerms = [];
-      if (Array.isArray(obj.permissions)) {
-        newPerms = obj.permissions;
-      } else if (obj.permissions && typeof obj.permissions === 'object') {
-        newPerms = Object.keys(obj.permissions).filter(k => obj.permissions[k]);
-      }
-      const newRole = obj.role || '';
-      const newBanned = !!obj.banned;
-      const currPerms = Array.isArray(currentUser.permissions) ? currentUser.permissions : [];
-      const permsChanged = JSON.stringify([...newPerms].sort()) !== JSON.stringify([...currPerms].sort());
-      const roleChanged = newRole !== currentUser.role;
-      const bannedChanged = newBanned !== !!currentUser.banned;
-      if (newBanned) {
-        setToast({
-          text: '⚠️ لقد تم حظر حسابك من قبل الإدارة.',
-          type: 'error'
-        });
-        handleLogout(true);
-        return;
-      }
-      setAuthVerified(true);
-      if (permsChanged || roleChanged || bannedChanged) {
-        const updated = _extends({}, currentUser, {
-          role: newRole,
-          permissions: newPerms,
-          banned: newBanned
-        });
-        setCurrentUser(updated);
-        try {
-          localStorage.setItem('taif:session', JSON.stringify(updated));
-        } catch (_) {}
-        setToast({
-          text: 'ℹ️ تم تحديث صلاحيات حسابك.',
-          type: 'info'
-        });
-      }
-    });
-    return () => {
-      if (unsubSess) fb.off(sessRef);
-      if (unsubUser) fb.off(userRef);
-    };
-  }, [currentUser]);
-  let pView;
+  
+useEffect(() => {
+  if (!currentUser || !currentUser.username || !currentUser.sessionId) return;
+  setAuthVerified(true);
+}, [currentUser]);
+let pView;
   try {
     pView = localStorage.getItem(K.VIEW);
   } catch (_) {
@@ -2345,7 +2301,7 @@ function App() {
         if (v && typeof v === 'object') {
           _remote.current.banner = true;
           setBanner(v);
-          setBTmp(v);
+          setBTmp((v && typeof v==='object') ? {texts:[], color:'#000', moveDur:1.5, stayDur:3, ...v} : {texts:[], color:'#000', moveDur:1.5, stayDur:3});
           saveSnapshot({
             banner: v
           });
@@ -3853,7 +3809,7 @@ function App() {
     }
   }, React.createElement("span", {
     className: "px-4 sm:px-6"
-  }, banner.texts[ad.i] || ""))), React.createElement("div", {
+  }, (Array.isArray(banner?.texts)?banner.texts[ad.i]:"") || ""))), React.createElement("div", {
     className: `border-l border-slate-200 flex items-center justify-center gap-3 px-2 sm:px-4 bg-gradient-to-r ${banClass}`
   }, React.createElement("div", {
     className: `w-3 h-3 sm:w-4 sm:h-4 rounded-full shadow ${online ? "bg-green-500" : "bg-red-500"}`,
