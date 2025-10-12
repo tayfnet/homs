@@ -323,20 +323,90 @@
     const map = {}; (data||[]).forEach(row=>{ const id=(row.at||Date.now())+"_"+Math.random().toString(36).slice(2); map[id]=row; }); return map;
 }
 
-  function subscribe(table, filter, onTick, nameKey){
+  
+function subscribe(table, filter, onTick, nameKey){
   if (!isClientReady()){
-    try{ if (typeof onTick === 'function') { onTick(); } }catch(_){}
+    try{ if (typeof onTick === 'function') { onTick(null); } }catch(_){}
     offlineNotifyOnce("الاتصال المباشر (Realtime) غير متوفر — تم تفعيل وضع القراءة فقط مؤقتًا.");
     return { __offline: true, unsubscribe(){}, on(){ return this; }, subscribe(){ return this; } };
   }
-  const name = `realtime_${table}_${nameKey||'all'}`;
-  const ch = client.channel(name)
-    .on('postgres_changes', { event:'*', schema:'public', table, filter }, async () => {
-      try { await onTick(); } catch(_) {}
+
+  const baseName = `realtime_${table}_${nameKey||'all'}`;
+  let ch = null;
+  let attempt = 0;
+  const maxDelay = 8000;
+
+  const RT = (window.__RT = window.__RT || { subs: [], started:false });
+  const desc = { table, filter, nameKey, ch:null, onTick, lastEventAt: 0, reattach:null };
+
+  const safeTick = (payload) => {
+    // Deliver payload immediately, and also schedule micro/macro frames to survive throttled runtimes
+    try { onTick && onTick(payload); } catch(_){}
+    try { setTimeout(()=>{ try{ onTick && onTick(payload); }catch(_){} }, 0); } catch(_){}
+    try { requestAnimationFrame(()=>{ try{ onTick && onTick(payload); }catch(_){} }); } catch(_){}
+  };
+
+  const attach = () => {
+    const name = `${baseName}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    try { if (ch) { client.removeChannel(ch); } } catch(_){}
+    ch = client.channel(name);
+    desc.ch = ch;
+
+    ch.on('postgres_changes', { event:'*', schema:'public', table, filter }, (payload) => {
+      desc.lastEventAt = Date.now();
+      safeTick(payload);
     });
-  ch.subscribe();
+
+    ch.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        attempt = 0;
+        desc.lastEventAt = Date.now();
+        safeTick(null); // initial sync on (re)subscribe
+      }
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        attempt = Math.min(attempt + 1, 6);
+        const delay = Math.min( (2 ** attempt) * 300, maxDelay );
+        setTimeout(()=>{
+          attach();
+        }, delay);
+      }
+    });
+  };
+
+  desc.reattach = attach;
+  attach();
+
+  // register in global supervisor registry
+  RT.subs.push(desc);
+
+  // start supervisor once (self-heal for idle tabs/TVs)
+  if (!RT.started){
+    RT.started = true;
+    const supervisor = (force) => {
+      const now = Date.now();
+      (RT.subs||[]).forEach(d => {
+        const stale = !d.lastEventAt || (now - d.lastEventAt > 60000); // stale > 60s
+        if (force || stale) {
+          try { d.reattach && d.reattach(); } catch(_){}
+          try { d.onTick && d.onTick(null); } catch(_){}
+        }
+      });
+    };
+    try { setInterval(()=>supervisor(false), 20000); } catch(_){}
+    try {
+      // When tab visible/focused/online again, force immediate resync
+      window.addEventListener('focus', ()=>supervisor(true));
+      window.addEventListener('online', ()=>supervisor(true));
+      window.addEventListener('pageshow', ()=>supervisor(true));
+      document.addEventListener('visibilitychange', ()=>{
+        if (document.visibilityState === 'visible') supervisor(true);
+      });
+    } catch(_){}
+  }
+
   return ch;
 }
+
 
   const $db = {
     ref: (path) => ({ key: path }),
@@ -382,23 +452,17 @@ if (key.startsWith('taif/users/')){
           const remote = await getKV('taif/base');
           const now = new Date();
           const atMidnight = (now.getHours() === 0 && now.getMinutes() === 0);
-          const sameObj = (a,b) => {
-            try { return JSON.stringify(a) === JSON.stringify(b); } catch(_){ return false; }
-          };
+          const sameObj = (a,b) => { try{ return JSON.stringify(a) === JSON.stringify(b);}catch(_){return false;}};
           if (!remote){
-            // No remote base exists -> safe to create
             await setKV('taif/base', value);
             return;
           }
-          // If remote exists for the same date, keep it immutable (24h) unless identical
           if (remote && remote.date === value.date){
             if (!sameObj(remote.base, value.base)){
-              // Reject overwrite silently; this prevents old clients from corrupting the day's base
               console.warn('⛔ Ignored taif/base overwrite for same date; remote is authoritative.');
             }
             return;
           }
-          // If date is different, allow only during actual midnight window
           if (remote && remote.date !== value.date){
             if (atMidnight){
               await setKV('taif/base', value);
@@ -431,7 +495,16 @@ if (key.startsWith('taif/users/')){
       } else if (key.startsWith('taif/adminactionslog')){
         ch = subscribe('adminactionslog', undefined, async ()=> cb(snap(await getLogsMap())), 'logs');
       } else {
-        ch = subscribe('app_state', `key=eq.${key}`, async ()=> cb(snap(await getKV(key))), key);
+        ch = subscribe('app_state', `key=eq.${key}`, (payload) => {
+  try {
+    const row = payload && payload.new;
+    if (row && Object.prototype.hasOwnProperty.call(row, 'value')) {
+      cb(snap(row.value));
+      return;
+    }
+  } catch(_) {}
+  (async () => { try { cb(snap(await getKV(key))); } catch(_) {} })();
+}, key);
       }
       channels.set(key, ch);
       return ch;
@@ -1225,21 +1298,22 @@ const Arrow = ({
     d: d
   }));
 };
-const ChangeBadge = ({
-  pct,
-  className = ""
-}) => {
-  const n = +pct,
-    pos = n > 0,
-    neg = n < 0,
-    dir = pos ? "up" : neg ? "down" : "flat";
+
+const ChangeBadge = ({ pct, className = "" }) => {
+  const isNull = (pct === null || pct === undefined || (typeof pct === 'number' && !isFinite(pct)) || Number.isNaN(+pct));
+  if (isNull) {
+    return React.createElement("span", {
+      className: `table-numbers inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl font-bold shadow text-slate-600 bg-slate-100 ${className}`
+    }, "—");
+  }
+  const n = +pct, pos = n > 0, neg = n < 0;
+  const dir = pos ? "up" : neg ? "down" : "flat";
   const badge = pos ? "text-green-700 bg-green-100" : neg ? "text-red-700 bg-red-100" : "text-blue-700 bg-blue-100";
   return React.createElement("span", {
     className: `table-numbers inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl font-bold shadow ${badge} ${className}`
-  }, React.createElement(Arrow, {
-    dir: dir
-  }), `${pos ? "+" : neg ? "−" : ""}${Math.abs(n).toFixed(2)}%`);
+  }, React.createElement(Arrow, { dir: dir }), `${pos ? "+" : neg ? "−" : ""}${Math.abs(n).toFixed(2)}%`);
 };
+
 const CurrencyInfo = ({
   row,
   showName = true
@@ -1312,17 +1386,22 @@ const composeRows = (data, base) => {
     } else if (baseEntry != null) {
       baseSell = toNum(baseEntry);
     }
+    
     let __LC = (window.__lastChange = window.__lastChange || {});
-    let changePct = (__LC[r.code] ?? 0);
-    if (baseSell > 0) {
+    let changePct = (Object.prototype.hasOwnProperty.call(__LC, r.code) ? __LC[r.code] : null);
+    const baseSrc = (typeof window !== 'undefined' && window.__baseSource) || 'unknown';
+    if (baseSrc !== 'remote') {
+      changePct = (Object.prototype.hasOwnProperty.call(__LC, r.code) ? __LC[r.code] : null);
+    } else if (baseSell > 0) {
       const newPct = ((sell - baseSell) / baseSell) * 100;
-      if (Math.abs(newPct - changePct) > 0.01) {
+      if (isFinite(newPct) && (changePct === null || Math.abs(newPct - changePct) > 0.01)) {
         changePct = newPct;
         __LC[r.code] = newPct;
       }
     } else {
-      changePct = 0;
+      changePct = (Object.prototype.hasOwnProperty.call(__LC, r.code) ? __LC[r.code] : null);
     }
+            
     return {
       ...r,
       buy,
@@ -3035,6 +3114,8 @@ useEffect(() => {
       window.$db.onValue(window.$db.ref('taif/base'), snap => {
         _synced.current.base = true;
         const v = snap.val();
+        try{ window.__baseSource = (v && v.base && v.date) ? 'remote' : 'local'; }catch(_){}
+
         if (!v || !v.date || !v.base) {
           hasRemoteBase.current = false;
           let newBase;
@@ -3078,6 +3159,8 @@ useEffect(() => {
         if (!localDate || localDate !== remoteDate) {
           _remote.current.base = true;
           setBase(cleaned);
+          try{ window.__baseSource = 'remote'; }catch(_){}
+
           setBaseDate(remoteDate);
           try{ ensureChangeCacheFresh(remoteDate, cleaned); }catch(_){}
           saveSnapshot({ base: cleaned, baseDate: remoteDate });
@@ -3106,7 +3189,6 @@ useEffect(() => {
               window.$db.set(window.$db.ref('taif/base'), { date: d, base: b });
             } else {
               // Remote already has a base -> honor it; do NOT push local cached base
-              // Optionally, align local state with remote on next onValue tick
             }
           } catch(_){}
         }
