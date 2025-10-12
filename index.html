@@ -82,6 +82,18 @@
     if(!window.$db || window.$db.__wrapped) return;
     var origSet = window.$db.set.bind(window.$db);
     window.$db.set = async function(refOrPath, value){
+    try{
+      var k = (typeof refOrPath === 'string') ? refOrPath : (refOrPath && refOrPath.key);
+      if (k === 'taif/data'){
+        try{
+          var remote = await getKV('taif/data');
+          var same = false;
+          try{ same = JSON.stringify(remote) === JSON.stringify(value); }catch(_){ same=false; }
+          if (same){ return; }
+        }catch(_){}
+      }
+    }catch(__e){}
+    
       var key = (typeof refOrPath === 'string') ? refOrPath : (refOrPath && refOrPath.key);
       var res = await origSet(refOrPath, value);
       try{
@@ -340,7 +352,6 @@ function subscribe(table, filter, onTick, nameKey){
   const desc = { table, filter, nameKey, ch:null, onTick, lastEventAt: 0, reattach:null };
 
   const safeTick = (payload) => {
-    // Deliver payload immediately, and also schedule micro/macro frames to survive throttled runtimes
     try { onTick && onTick(payload); } catch(_){}
     try { setTimeout(()=>{ try{ onTick && onTick(payload); }catch(_){} }, 0); } catch(_){}
     try { requestAnimationFrame(()=>{ try{ onTick && onTick(payload); }catch(_){} }); } catch(_){}
@@ -361,7 +372,7 @@ function subscribe(table, filter, onTick, nameKey){
       if (status === 'SUBSCRIBED') {
         attempt = 0;
         desc.lastEventAt = Date.now();
-        safeTick(null); // initial sync on (re)subscribe
+        safeTick(null);
       }
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         attempt = Math.min(attempt + 1, 6);
@@ -376,16 +387,14 @@ function subscribe(table, filter, onTick, nameKey){
   desc.reattach = attach;
   attach();
 
-  // register in global supervisor registry
   RT.subs.push(desc);
 
-  // start supervisor once (self-heal for idle tabs/TVs)
   if (!RT.started){
     RT.started = true;
     const supervisor = (force) => {
       const now = Date.now();
       (RT.subs||[]).forEach(d => {
-        const stale = !d.lastEventAt || (now - d.lastEventAt > 60000); // stale > 60s
+        const stale = !d.lastEventAt || (now - d.lastEventAt > 60000);
         if (force || stale) {
           try { d.reattach && d.reattach(); } catch(_){}
           try { d.onTick && d.onTick(null); } catch(_){}
@@ -394,7 +403,6 @@ function subscribe(table, filter, onTick, nameKey){
     };
     try { setInterval(()=>supervisor(false), 20000); } catch(_){}
     try {
-      // When tab visible/focused/online again, force immediate resync
       window.addEventListener('focus', ()=>supervisor(true));
       window.addEventListener('online', ()=>supervisor(true));
       window.addEventListener('pageshow', ()=>supervisor(true));
@@ -617,6 +625,18 @@ if (key.startsWith('taif/users/')){
       } catch(e){ window.__lastData = null; }
     }
     window.$db.set = async function(refOrPath, value){
+    try{
+      var k = (typeof refOrPath === 'string') ? refOrPath : (refOrPath && refOrPath.key);
+      if (k === 'taif/data'){
+        try{
+          var remote = await getKV('taif/data');
+          var same = false;
+          try{ same = JSON.stringify(remote) === JSON.stringify(value); }catch(_){ same=false; }
+          if (same){ return; }
+        }catch(_){}
+      }
+    }catch(__e){}
+    
       var key = null;
       try{
         if (typeof refOrPath === 'string') key = refOrPath;
@@ -1401,7 +1421,7 @@ const composeRows = (data, base) => {
     } else {
       changePct = (Object.prototype.hasOwnProperty.call(__LC, r.code) ? __LC[r.code] : null);
     }
-            
+                
     return {
       ...r,
       buy,
@@ -1666,6 +1686,8 @@ function DatetimeModal({
   }, "\u062D\u0641\u0638")));
 }
 function App() {
+  try{ window.__hydratingData = true; }catch(_){}
+
   const cachedApp = loadCache();
   const [lastSync, setLastSync] = useState(cachedApp?.lastSync || null);
   const [online, setOnline] = useState(navigator.onLine);
@@ -3030,12 +3052,14 @@ useEffect(() => {
           setData(v);
           saveSnapshot({
             data: v
-          });
-          saveJSON(K.DATA, {
+          
+      });
+try{ window.__hydratingData = false; }catch(_){}
+saveJSON(K.DATA, {
             data: v
           });
         } else {
-          window.$db.set(window.$db.ref('taif/data'), DEFAULT_DATA);
+          // NOTE: do not push defaults to server here to avoid overwriting remote state
           setData(DEFAULT_DATA);
           saveSnapshot({
             data: DEFAULT_DATA
@@ -3222,6 +3246,7 @@ useEffect(() => {
   }, [online]);
   React.useEffect(() => {
     if (!dbRef.current) return;
+    if (typeof window !== 'undefined' && window.__hydratingData) return;
     if (!_synced.current.data) return;
     if (_remote.current.data) {
       _remote.current.data = false;
