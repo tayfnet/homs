@@ -375,10 +375,44 @@ if (key.startsWith('taif/users/')){
         return;
       }
 
+      
       if (key === 'taif/base' && value && typeof value === 'object' && value.date && value.base){
-        await setKV('taif/base', value);
+        // Strong guard: never let stale clients overwrite today's closing/base snapshot
+        try{
+          const remote = await getKV('taif/base');
+          const now = new Date();
+          const atMidnight = (now.getHours() === 0 && now.getMinutes() === 0);
+          const sameObj = (a,b) => {
+            try { return JSON.stringify(a) === JSON.stringify(b); } catch(_){ return false; }
+          };
+          if (!remote){
+            // No remote base exists -> safe to create
+            await setKV('taif/base', value);
+            return;
+          }
+          // If remote exists for the same date, keep it immutable (24h) unless identical
+          if (remote && remote.date === value.date){
+            if (!sameObj(remote.base, value.base)){
+              // Reject overwrite silently; this prevents old clients from corrupting the day's base
+              console.warn('⛔ Ignored taif/base overwrite for same date; remote is authoritative.');
+            }
+            return;
+          }
+          // If date is different, allow only during actual midnight window
+          if (remote && remote.date !== value.date){
+            if (atMidnight){
+              await setKV('taif/base', value);
+            } else {
+              console.warn('⛔ Attempt to change taif/base date outside midnight was ignored.');
+            }
+            return;
+          }
+        }catch(e){
+          console.warn('Guard for taif/base encountered error; falling back to safe no-op.', e);
+        }
         return;
       }
+
       await setKV(key, value);
     },
     onValue(refOrPath, cb){
@@ -3062,13 +3096,21 @@ useEffect(() => {
       try {
         const b = baseRef.current;
         const d = baseDateRef.current;
+        
         if (!hasRemoteBase.current && b && Object.keys(b).length > 0 && d) {
-          _remote.current.base = true;
-          window.$db.set(window.$db.ref('taif/base'), {
-            date: d,
-            base: b
-          });
+          try{
+            // Extra guard: only write if remote truly missing
+            const existing = await (window.$db ? (async ()=> await getKV('taif/base'))() : Promise.resolve(null));
+            if (!existing){
+              _remote.current.base = true;
+              window.$db.set(window.$db.ref('taif/base'), { date: d, base: b });
+            } else {
+              // Remote already has a base -> honor it; do NOT push local cached base
+              // Optionally, align local state with remote on next onValue tick
+            }
+          } catch(_){}
         }
+
       } catch (_) {}
     };
     if (window.$db) setup();else {
