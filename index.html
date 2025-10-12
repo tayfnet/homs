@@ -1,69 +1,9 @@
 <!DOCTYPE html><html lang="ar" dir="rtl"><head>
+  
 
-
-<script id="version-guard-toast">
-(function() {
-  var CURRENT_VERSION = "2.0.0.0-merge";
-  var KEY = "taif:app_version";
-  try {
-    var saved = localStorage.getItem(KEY);
-    if (!saved) {
-      localStorage.setItem(KEY, CURRENT_VERSION);
-    } else if (saved !== CURRENT_VERSION) {
-      // 1) Clear local/session storage keys with 'taif:' prefix
-      try {
-        var keys = [];
-        for (var i=0;i<localStorage.length;i++) keys.push(localStorage.key(i));
-        keys.forEach(function(k){ if (k && k.indexOf("taif:")===0) localStorage.removeItem(k); });
-      }catch(_){
-      }
-      try {
-        var skeys = [];
-        for (var j=0;j<sessionStorage.length;j++) skeys.push(sessionStorage.key(j));
-        skeys.forEach(function(k){ if (k && k.indexOf("taif:")===0) sessionStorage.removeItem(k); });
-      }catch(_){
-      }
-
-      // 2) Persist new version
-      try { localStorage.setItem(KEY, CURRENT_VERSION); } catch(_){}
-
-      // 3) Show Toast
-      var showToast = function() {
-        var wrap = document.createElement('div');
-        wrap.setAttribute('dir','rtl');
-        wrap.style.cssText = "position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483647";
-        var bubble = document.createElement('div');
-        bubble.textContent = "🔄 تم تحديث النظام إلى إصدار جديد — تم مسح البيانات القديمة";
-        bubble.style.cssText = [
-          "background: rgba(17,24,39,.95)",
-          "color:#fff",
-          "border-radius:14px",
-          "padding:10px 16px",
-          "font:600 14px/1.3 system-ui,Segoe UI,Roboto,Tahoma",
-          "box-shadow:0 8px 24px rgba(0,0,0,.25)",
-          "border:1px solid rgba(255,255,255,.08)",
-          "max-width:92vw",
-          "text-align:center",
-          "white-space:nowrap"
-        ].join(";");
-        wrap.appendChild(bubble);
-        document.body.appendChild(wrap);
-        setTimeout(function(){ bubble.style.opacity="0.0"; bubble.style.transition="opacity .45s ease"; }, 1400);
-      };
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', showToast);
-      } else {
-        showToast();
-      }
-
-      // 4) Reload after 2 seconds
-      setTimeout(function(){ location.reload(); }, 2000);
-    }
-  } catch(_){
-    // non-fatal
-  }
-})();
-</script>
+<!-- The original version-guard script has been removed to prevent automatic
+     clearing of session data and page reloads that would cause unexpected
+     logout behaviour when loading this app locally. -->
 
 <link rel="preconnect" href="https://unpkg.com" crossorigin=""><link rel="dns-prefetch" href="https://unpkg.com"><link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin=""><link rel="dns-prefetch" href="https://cdn.tailwindcss.com"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin=""><link rel="dns-prefetch" href="https://cdn.jsdelivr.net"><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/><title>لوحة أسعار صرف العملات</title><script>
 (function(){
@@ -2290,14 +2230,23 @@ function App() {
           const sessionId = Date.now() + "_" + Math.random().toString(36).slice(2);
           const sessKey = `taif/session/${loginUser}`;
           const refSess = window.$db.ref(sessKey);
-          const once = window.$db.onValue(refSess, s2 => {
+          // Guard to ensure the session callback runs only once per login attempt.
+          let fired = false;
+          window.$db.onValue(refSess, s2 => {
+            // Ignore subsequent triggers after first handling
+            if (fired) return;
+            fired = true;
             const active = s2 && s2.val ? s2.val() : null;
-            if (once) window.$db.off(refSess);
+            // Unsubscribe from further updates for this path for this login attempt
+            try { window.$db.off(refSess); } catch (_) {}
+            // If another session is active with a different token, abort login
             if (active && active !== sessionId) {
               setLoginErr('⚠️ الحساب مستخدم الآن من جهاز آخر');
               return;
             }
-            try { window.$db.set(refSess, sessionId); } catch (_){}
+            // Write our new session token to the server
+            try { window.$db.set(refSess, sessionId); } catch (_) {}
+            // Normalize permissions array
             let perms = Array.isArray(obj.permissions) ? obj.permissions :
               (obj.permissions && typeof obj.permissions === 'object'
                 ? Object.keys(obj.permissions).filter(k => obj.permissions[k])
@@ -2306,7 +2255,7 @@ function App() {
             try {
               localStorage.setItem('taif:session', JSON.stringify(sess));
               localStorage.setItem('taif:session_token', sessionId);
-            } catch (_){}
+            } catch (_) {}
             setCurrentUser(sess);
             setLoginModalOpen(false);
             setLoginUser('');
@@ -2824,8 +2773,27 @@ useEffect(() => {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [menu]);
-  const [modal, setModal] = useState(null),
-    [toast, setToast] = useState(null);
+  const [modal, setModal] = useState(null);
+  // Toast state and a deduplication wrapper
+  const [toast, _setToast] = useState(null);
+  // Keep track of the last toast message and its timestamp to avoid showing
+  // duplicate messages in quick succession (e.g. repeated "تم تسجيل الدخول بنجاح").
+  const toastLastRef = React.useRef({ text: '', ts: 0 });
+  const setToast = React.useCallback((obj) => {
+    try {
+      // If the incoming toast has text, check for duplicates within 5 seconds
+      if (obj && obj.text) {
+        const now = Date.now();
+        const last = toastLastRef.current;
+        if (last && last.text === obj.text && (now - last.ts) < 5000) {
+          // Skip showing duplicate toast
+          return;
+        }
+        toastLastRef.current = { text: obj.text, ts: now };
+      }
+    } catch (_) {}
+    _setToast(obj);
+  }, []);
   useEffect(() => {
     if (!online) {
       try {
@@ -2945,6 +2913,35 @@ useEffect(() => {
       saveCache(snapshot);
     } catch (_) {}
   };
+
+  /**
+   * Persist a new data array to all available storage layers. This helper
+   * consolidates writing the updated currency list to the snapshot cache,
+   * localStorage, and the remote database (if available). It ensures that
+   * edits made while offline are preserved locally and will be pushed to the
+   * server once a connection is available. Note: callers should pass a
+   * sanitized array (using sanitizeData) to guarantee consistent ordering and
+   * structure.
+   * @param {Array} newArr The updated array of currency objects
+   */
+  const persistDataUpdate = (newArr) => {
+    try {
+      // Update snapshot so that reloads or other tabs will use the latest data
+      if (typeof saveSnapshot === 'function') {
+        saveSnapshot({ data: newArr });
+      }
+    } catch (_) {}
+    try {
+      // Update our own data cache for cross-tab sync
+      localStorage.setItem('taif:data', JSON.stringify(Array.isArray(newArr) ? newArr.slice() : []));
+    } catch (_) {}
+    try {
+      // Push to the remote DB via our wrapper if it's ready
+      if (window.$db && dbRef.current) {
+        dbRef.current.set(dbRef.current.ref('taif/data'), newArr);
+      }
+    } catch (_) {}
+  };
   const __canonAction = a => {
     if (!a) return '';
     if (a === 'editUSD') return 'editUSD';
@@ -3004,6 +3001,13 @@ useEffect(() => {
     base: false,
     datetime: false
   });
+
+  // Flag to identify when a data update originates from another tab via the
+  // `storage` event. When true, the following localStorage persistence effect
+  // will skip writing the data back to localStorage, preventing an infinite
+  // loop of storage events bouncing between tabs. The flag is cleared after
+  // processing the update.
+  const fromStorageRef = React.useRef(false);
   const syncSetup = React.useRef(() => {});
   const detachAll = () => {
     try {
@@ -3045,28 +3049,24 @@ useEffect(() => {
       if (!fb) return;
       dbRef.current = fb;
       window.$db.onValue(window.$db.ref('taif/data'), snap => {
+        // Mark that the data stream has synced at least once
         _synced.current.data = true;
         const v = snap.val();
+        // Whether the server provided an array or not, ensure hydration flag is cleared
+        // so that local changes will be propagated back to the server if needed.
+        try { window.__hydratingData = false; } catch (_) {}
         if (v && Array.isArray(v)) {
+          // Server provided valid data; update local state and snapshot
           _remote.current.data = true;
           setData(v);
-          saveSnapshot({
-            data: v
-          
-      });
-try{ window.__hydratingData = false; }catch(_){}
-saveJSON(K.DATA, {
-            data: v
-          });
+          saveSnapshot({ data: v });
+          saveJSON(K.DATA, { data: v });
         } else {
-          // NOTE: do not push defaults to server here to avoid overwriting remote state
+          // No remote data yet; use defaults locally and snapshot them
+          // NOTE: do not push defaults to server here to avoid overwriting remote state until hydration completes
           setData(DEFAULT_DATA);
-          saveSnapshot({
-            data: DEFAULT_DATA
-          });
-          saveJSON(K.DATA, {
-            data: DEFAULT_DATA
-          });
+          saveSnapshot({ data: DEFAULT_DATA });
+          saveJSON(K.DATA, { data: DEFAULT_DATA });
         }
       });
       window.$db.onValue(window.$db.ref('taif/banner'), snap => {
@@ -3244,16 +3244,24 @@ saveJSON(K.DATA, {
       }
     } catch (_) {}
   }, [online]);
-  React.useEffect(() => {
-    if (!dbRef.current) return;
-    if (typeof window !== 'undefined' && window.__hydratingData) return;
-    if (!_synced.current.data) return;
-    if (_remote.current.data) {
-      _remote.current.data = false;
-      return;
-    }
-    dbRef.current.set(dbRef.current.ref('taif/data'), data);
-  }, [data]);
+    React.useEffect(() => {
+      if (!dbRef.current) return;
+      // Skip pushing local changes while hydrating remote data to avoid
+      // overwriting the server before it has provided its own version. Once
+      // hydration completes, window.__hydratingData will be false.
+      if (typeof window !== 'undefined' && window.__hydratingData) return;
+      // Treat updates that originate from remote (or another tab via storage)
+      // specially: the `_remote.current.data` flag will be set in those cases,
+      // and we reset it without writing back to the database.
+      if (_remote && _remote.current && _remote.current.data) {
+        _remote.current.data = false;
+        return;
+      }
+      // Always push local modifications to the database wrapper. This will
+      // cascade into saving a snapshot and updating localStorage via the
+      // customized set() wrapper even if no remote connection is available.
+      dbRef.current.set(dbRef.current.ref('taif/data'), data);
+    }, [data]);
   React.useEffect(() => {
     if (!dbRef.current) return;
     if (!_synced.current.banner) return;
@@ -3281,6 +3289,86 @@ saveJSON(K.DATA, {
     }
     dbRef.current.set(dbRef.current.ref('taif/logo'), logo || '');
   }, [logo]);
+
+  // === Cross-tab synchronization for currency data ===
+  // When another tab updates the currency data, it writes the new array to
+  // localStorage under the key 'taif:data'. Browsers fire a `storage` event
+  // in all other tabs (except the one that performed the write). This effect
+  // listens for that event and updates local state accordingly. Without this
+  // handler, if the connection to the remote database is unavailable (e.g.,
+  // offline or local file), edits in one tab wouldn't propagate to other
+  // opened instances of the page. To avoid creating an infinite loop, we mark
+  // the update as coming from a remote source by toggling `_remote.current.data`,
+  // which tells the subsequent data effect not to write back to the database.
+  React.useEffect(() => {
+    const handleStorage = (e) => {
+      try {
+        // Only process updates for our data key
+        if (e && e.key === 'taif:data' && e.newValue) {
+          const newData = JSON.parse(e.newValue);
+          if (Array.isArray(newData)) {
+            // Mark this as a remote update so the writer effect will skip
+            if (_remote && _remote.current) {
+              _remote.current.data = true;
+            }
+            // Flag that this update came from another tab; we'll use this
+            // to suppress writing back to localStorage in the corresponding
+            // persistence effect.
+            if (fromStorageRef && fromStorageRef.current !== undefined) {
+              fromStorageRef.current = true;
+            }
+            setData(newData);
+          }
+        }
+      } catch (_) {}
+    };
+    // Add event listener for cross-tab changes
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  // Write current data array to localStorage on every change (for cross-tab sync)
+  // If the change originated from a remote source (i.e. `_remote.current.data` is true),
+  // skip writing back to avoid echoing the same update and creating a loop. When the
+  // update originates locally (e.g. user edits on this tab), `_remote.current.data`
+  // will be false and we persist the array to localStorage for other tabs.
+  React.useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      if (window.__hydratingData) return;
+      // If the update originated from a storage event in another tab, skip
+      // writing back to localStorage to avoid event loops. Clear the flag so
+      // subsequent local edits will persist normally.
+      if (fromStorageRef && fromStorageRef.current) {
+        fromStorageRef.current = false;
+        return;
+      }
+      const remoteFlag = _remote && _remote.current && _remote.current.data;
+      if (!remoteFlag) {
+        // Persist a shallow copy to prevent accidental mutations
+        const payload = Array.isArray(data) ? data.slice() : [];
+        localStorage.setItem('taif:data', JSON.stringify(payload));
+      }
+    } catch (_) {}
+  }, [data]);
+
+  // Persist data changes to the snapshot storage. This ensures that edits are
+  // written to the local StorageManager cache immediately, so that when the
+  // application reloads or another tab reads the cache (via StorageManager.load),
+  // it will see the updated values instead of reverting to an older state. We
+  // deliberately do not guard on `_synced.current.data` here, because offline
+  // edits should still be saved locally even if the remote database hasn't
+  // hydrated. The saveSnapshot function merges with the existing snapshot and
+  // updates lastSync timestamp.
+  React.useEffect(() => {
+    try {
+      if (typeof saveSnapshot === 'function') {
+        saveSnapshot({ data });
+      }
+    } catch (_) {}
+  }, [data]);
   React.useEffect(() => {
     if (!dbRef.current) return;
     if (!_synced.current.bannerImg) return;
@@ -3596,11 +3684,14 @@ saveJSON(K.DATA, {
       const oldSell = usd.sell;
       const newBuy = toNum(usdTmp.buy);
       const newSell = toNum(usdTmp.sell);
-      setData(p => sanitizeData(p.map(rr => rr.code === "USD" ? {
-        ...rr,
-        buy: newBuy,
-        sell: newSell
-      } : rr)));
+        // Compute the updated array synchronously so we can persist it to all storage layers
+        const updated = sanitizeData((data || []).map(rr => rr.code === "USD" ? {
+          ...rr,
+          buy: newBuy,
+          sell: newSell
+        } : rr));
+        setData(updated);
+        persistDataUpdate(updated);
       try {
         const actor = currentUser && currentUser.username ? currentUser.username : "unknown";
         const id = Date.now() + "_" + Math.random().toString(36).slice(2);
@@ -3670,9 +3761,12 @@ saveJSON(K.DATA, {
   }, "\u0625\u0644\u063A\u0627\u0621"), React.createElement(Btn, {
     className: "text-white bg-green-600 w-28 h-11",
     onClick: () => {
-      if (editIdx != null) {
-        setData(prev => prev.filter((_, i) => i !== editIdx));
-      }
+        if (editIdx != null) {
+          // Remove the selected currency and persist the change
+          const newArr = (data || []).filter((_, i) => i !== editIdx);
+          setData(newArr);
+          persistDataUpdate(newArr);
+        }
       setModal(null);
       setToast({
         text: "✅ تم الحذف",
@@ -3941,12 +4035,17 @@ saveJSON(K.DATA, {
           });
         }
       }
-      setData(sanitizeData(src));
-      setModal(null);
-      setToast({
-        text: "✅ تم تحديث كافة العملات",
-        type: "success"
-      });
+        {
+          const updatedList = sanitizeData(src);
+          setData(updatedList);
+          // Persist the updated list immediately for offline durability
+          persistDataUpdate(updatedList);
+        }
+        setModal(null);
+        setToast({
+          text: "✅ تم تحديث كافة العملات",
+          type: "success"
+        });
     }
   }, "\u062D\u0641\u0638 \u0627\u0644\u0643\u0644"))), React.createElement(DatetimeModal, {
     open: modal === "datetime",
@@ -4191,10 +4290,12 @@ saveJSON(K.DATA, {
     data: data,
     editIdx: editIdx,
     onCancel: () => setModal(null),
-    onSaved: list => {
-      setData(list);
-      setModal(null);
-    },
+      onSaved: list => {
+        // Persist the updated list to all layers before closing the modal
+        setData(list);
+        persistDataUpdate(list);
+        setModal(null);
+      },
     setToast: setToast
   })), React.createElement(Modal, {
     open: adminModalOpen,
