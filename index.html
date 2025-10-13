@@ -174,21 +174,14 @@ color-scheme:light;--firstcol-pr:32px}*{box-sizing:border-box}html,body{height:1
 (function(){
   const SUPABASE_URL = "https://ibbtgjheqdgcacmcbpaq.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImliYnRnamhlcWRnY2FjbWNicGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjkwMDQsImV4cCI6MjA3NTY0NTAwNH0.ymJHT9Qt7hFCPxTKHLexfoQ4mqo4igbCTu5mHjMgEHY";
-  // Reduce realtime events per second for better performance
   const client = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    // The original config requested up to 10 events per second from Supabase's realtime service.
-    // Lowering this to 3 reduces the number of realtime messages and can help improve perceived responsiveness,
-    // especially on low‑power devices or slow network connections.
-    realtime: { params: { eventsPerSecond: 3 } }
+    realtime: { params: { eventsPerSecond: 10 } }
   }) : null;
 
   const channels = new Map();
   const pollers = new Map();
-  // Increase polling intervals to reduce CPU/network overhead.
-  // When the page/tab is visible we poll every 7 seconds instead of 2.5.
-  const POLL_MS_VISIBLE = 7000;
-  // When the page/tab is hidden we poll every 30 seconds instead of 8.
-  const POLL_MS_HIDDEN  = 30000;
+  const POLL_MS_VISIBLE = 2500;
+  const POLL_MS_HIDDEN  = 8000;
   function __clearPoller(key){ try{ const t = pollers.get(key); if(t){ clearInterval(t); pollers.delete(key); } }catch(_){ } }
 
   function snap(val){ return { val: () => val }; }
@@ -209,13 +202,9 @@ color-scheme:light;--firstcol-pr:32px}*{box-sizing:border-box}html,body{height:1
     const { data } = await client
       .from('adminactionslog')
       .select('*')
-      // Exclude anonymous and system actors
       .neq('actor','anon')
       .neq('actor','system')
-      // Retrieve the most recent records first and limit the number of rows
-      // to avoid downloading the entire history on every refresh.
-      .order('at',{ascending:false})
-      .limit(200);
+      .order('at',{ascending:false});
     const map = {}; (data||[]).filter(row => !['addUser','updateUser','deleteUser'].includes(String(row.action||''))).forEach(row=>{ const id=(row.at||Date.now())+'_'+Math.random().toString(36).slice(2); map[id]=row; }); return map;
   }
 
