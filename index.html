@@ -1,4 +1,55 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><link rel="preconnect" href="https://unpkg.com" crossorigin><link rel="dns-prefetch" href="https://unpkg.com"><link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin><link rel="dns-prefetch" href="https://cdn.tailwindcss.com"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><link rel="dns-prefetch" href="https://cdn.jsdelivr.net"><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/><title>لوحة أسعار صرف العملات</title><script>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head>
+  
+<script id="version-guard-toast">
+(function() {
+  var CURRENT_VERSION = "2.0.0.0-stable-plus";
+  var KEY = "taif:app_version";
+  try {
+    var saved = localStorage.getItem(KEY);
+    if (!saved) {
+      localStorage.setItem(KEY, CURRENT_VERSION);
+    } else if (saved !== CURRENT_VERSION) {
+      // Clear taif:* except session
+      try {
+        var toDel = [];
+        for (var i=0;i<localStorage.length;i++) toDel.push(localStorage.key(i));
+        var PRESERVE = new Set([KEY, 'taif:session', 'taif:session_token']);
+        toDel.forEach(function(k){
+          if (k && k.indexOf("taif:")===0 && !PRESERVE.has(k) && !k.startsWith('taif:session/')) {
+            localStorage.removeItem(k);
+          }
+        });
+      } catch(_) {}
+      try { localStorage.setItem(KEY, CURRENT_VERSION); } catch(_){}
+      var showToast = function() {
+        var wrap = document.createElement('div');
+        wrap.setAttribute('dir','rtl');
+        wrap.style.cssText = "position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483647";
+        var bubble = document.createElement('div');
+        bubble.textContent = "🔄 تم تحديث النظام إلى إصدار جديد — تم مسح البيانات القديمة";
+        bubble.style.cssText = [
+          "background: rgba(17,24,39,.95)",
+          "color:#fff",
+          "border-radius:14px",
+          "padding:10px 16px",
+          "font:600 14px/1.3 system-ui,Segoe UI,Roboto,Tahoma",
+          "box-shadow:0 8px 24px rgba(0,0,0,.25)",
+          "border:1px solid rgba(255,255,255,.08)",
+          "max-width:92vw",
+          "text-align:center",
+          "white-space:nowrap"
+        ].join(";");
+        wrap.appendChild(bubble);
+        document.body.appendChild(wrap);
+        setTimeout(function(){ bubble.style.opacity="0.0"; bubble.style.transition="opacity .45s ease"; }, 1400);
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showToast);
+      else showToast();
+    }
+  } catch(_) {}
+})();
+</script>
+<link rel="preconnect" href="https://unpkg.com" crossorigin><link rel="dns-prefetch" href="https://unpkg.com"><link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin><link rel="dns-prefetch" href="https://cdn.tailwindcss.com"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><link rel="dns-prefetch" href="https://cdn.jsdelivr.net"><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/><title>لوحة أسعار صرف العملات</title><script>
   window.tailwind=window.tailwind||{};
   tailwind.config={safelist:[
     'bg-gradient-to-tr','bg-gradient-to-r','text-white','text-gray-100','text-gray-900',
@@ -57,6 +108,22 @@ color-scheme:light;--firstcol-pr:32px}*{box-sizing:border-box}html,body{height:1
   0% { transform: translateX(0); }
   100% { transform: translateX(-100%); }
 }
+
+/* === Stable+ readability for BUY/SELL pills === */
+.pill-buy, .pill-sell{
+  color:#F9FAFB !important;
+  -webkit-text-stroke:0.6px rgba(0,0,0,.45);
+  text-shadow:0 1px 1px rgba(0,0,0,.35), 0 0 1px rgba(0,0,0,.35);
+  font-weight:900 !important;
+}
+.cards-view .pill-card.from-green-500,
+.cards-view .pill-card.from-red-500{
+  color:#F9FAFB !important;
+  -webkit-text-stroke:0.6px rgba(0,0,0,.45);
+  text-shadow:0 1px 1px rgba(0,0,0,.35), 0 0 1px rgba(0,0,0,.35);
+  font-weight:900 !important;
+}
+
 </style><style id="fab-fix">.bottom-fixed{--footer-h:48px;}@media (max-width:640px){.bottom-fixed{--footer-h:40px;}}.drawer{z-index:100001;}.drawer-backdrop{z-index:100000;}</style>
 <style id="title-unified">
 /* === Title unified style === */
@@ -107,14 +174,21 @@ color-scheme:light;--firstcol-pr:32px}*{box-sizing:border-box}html,body{height:1
 (function(){
   const SUPABASE_URL = "https://ibbtgjheqdgcacmcbpaq.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImliYnRnamhlcWRnY2FjbWNicGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjkwMDQsImV4cCI6MjA3NTY0NTAwNH0.ymJHT9Qt7hFCPxTKHLexfoQ4mqo4igbCTu5mHjMgEHY";
+  // Reduce realtime events per second for better performance
   const client = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    realtime: { params: { eventsPerSecond: 10 } }
+    // The original config requested up to 10 events per second from Supabase's realtime service.
+    // Lowering this to 3 reduces the number of realtime messages and can help improve perceived responsiveness,
+    // especially on low‑power devices or slow network connections.
+    realtime: { params: { eventsPerSecond: 3 } }
   }) : null;
 
   const channels = new Map();
   const pollers = new Map();
-  const POLL_MS_VISIBLE = 2500;
-  const POLL_MS_HIDDEN  = 8000;
+  // Increase polling intervals to reduce CPU/network overhead.
+  // When the page/tab is visible we poll every 7 seconds instead of 2.5.
+  const POLL_MS_VISIBLE = 7000;
+  // When the page/tab is hidden we poll every 30 seconds instead of 8.
+  const POLL_MS_HIDDEN  = 30000;
   function __clearPoller(key){ try{ const t = pollers.get(key); if(t){ clearInterval(t); pollers.delete(key); } }catch(_){ } }
 
   function snap(val){ return { val: () => val }; }
@@ -135,10 +209,14 @@ color-scheme:light;--firstcol-pr:32px}*{box-sizing:border-box}html,body{height:1
     const { data } = await client
       .from('adminactionslog')
       .select('*')
+      // Exclude anonymous and system actors
       .neq('actor','anon')
       .neq('actor','system')
-      .order('at',{ascending:false});
-    const map = {}; (data||[]).forEach(row=>{ const id=(row.at||Date.now())+"_"+Math.random().toString(36).slice(2); map[id]=row; }); return map;
+      // Retrieve the most recent records first and limit the number of rows
+      // to avoid downloading the entire history on every refresh.
+      .order('at',{ascending:false})
+      .limit(200);
+    const map = {}; (data||[]).filter(row => !['addUser','updateUser','deleteUser'].includes(String(row.action||''))).forEach(row=>{ const id=(row.at||Date.now())+'_'+Math.random().toString(36).slice(2); map[id]=row; }); return map;
   }
 
   
@@ -265,7 +343,31 @@ off(refOrPath){
 /* ======== React App (Complete) ======== */
 const {useState,useEffect,useMemo,useRef,useCallback}=React;
 
-/* === Logs presentation helpers (Arabic mapping) === */
+/* === Logs presentation helpers (Arabic mapping) === */// === مولّد جُمل عربية بشرية + رموز ===
+const ACTION_ICONS = {
+  'تعديل الدولار':'💵','تعديل عملة':'✏️','تعديل جميع العملات':'🛠️','إعدادات الإعلانات':'⚡',
+  'تغيير الهوية':'🖼️','تغيير الوقت':'🕒','تسجيل الدخول (نجاح)':'✅','تسجيل الدخول (فشل)':'❌',
+  'تسجيل خروج':'🚪','مسح السجل':'⚠️','إضافة مستخدم':'👤','حذف مستخدم':'👤','تعديل مستخدم':'👤'
+};
+const humanizeLog = (lg={}) => {
+  const a = lg.action || '';
+  const t = lg.target || '';
+  if (a === 'تعديل الدولار') return `تم تعديل سعر الدولار ${t ? '— ' + t : ''}`;
+  if (a === 'تعديل عملة') return `تم تعديل عملة ${t}`;
+  if (a === 'تعديل جميع العملات') return `تم تعديل جميع العملات ${t}`;
+  if (a === 'إعدادات الإعلانات') return `تم تعديل الإعلانات ${t}`;
+  if (a === 'تغيير الهوية') return `${t || 'تم تغيير الهوية'}`;
+  if (a === 'تغيير الوقت') return `تم تغيير الوقت ${t}`;
+  if (a === 'مسح السجل') return `تم مسح سجل الإدارة بالكامل`;
+  if (a === 'إضافة مستخدم') return `تم إضافة المستخدم ${t}`;
+  if (a === 'حذف مستخدم') return `تم حذف المستخدم ${t}`;
+  if (a === 'تعديل مستخدم') return `تم تعديل المستخدم ${t}`;
+  if (a === 'تسجيل الدخول (نجاح)') return `تم تسجيل الدخول`;
+  if (a === 'تسجيل الدخول (فشل)') return `فشل تسجيل الدخول`;
+  if (a === 'تسجيل خروج') return `تم تسجيل الخروج`;
+  return `${a} ${t}`.trim();
+};
+const fmtDT = (iso) => { try { return new Date(iso).toLocaleString(); } catch(_) { return String(iso||''); } };
 const mapAction = (a) => {
   const dict = {
     addUser: 'إضافة مستخدم',
@@ -322,8 +424,8 @@ const toPermArray = (objOrArr) => {
 };
 
 /* === Security helpers (images) === */
-const __IMG_TYPES = new Set(['image/png','image/jpeg','image/webp']);
-const __MAX_IMG_BYTES = 1 * 1024 * 1024;
+const __IMG_TYPES = new Set(['image/png','image/jpeg','image/webp','image/svg+xml','image/gif']);
+const __MAX_IMG_BYTES = 5 * 1024 * 1024;
 const validateImage = (file, setToast) => {
   if(!file) return false;
   if(!__IMG_TYPES.has(file.type)){
@@ -386,7 +488,7 @@ const K=Object.freeze({
 });
 
 // مدة صلاحية الجلسة بالمللي ثانية (هنا 6 ساعات)
-const SESSION_TTL_MS = 1000 * 60 * 60 * 6;
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 365;
 /********************
  * Cache helpers
  ********************/
@@ -1166,6 +1268,7 @@ function App(){
         if (unsub) window.$db.off(uRef);
         if (!obj) {
           setLoginErr('⚠️ المستخدم غير موجود');
+          try { window.Log && window.Log.loginFail && window.Log.loginFail(loginUser); } catch(_) {}
           return;
         }
         // بعض البنى تخزن كلمة المرور في حقل password أو passwordHash
@@ -1179,6 +1282,7 @@ function App(){
           bcryptObj.compare(loginPass, hash, function(err, same) {
             if (err || !same) {
               setLoginErr('⚠️ كلمة المرور غير صحيحة');
+              try { window.Log && window.Log.loginFail && window.Log.loginFail(loginUser); } catch(_) {}
               return;
             }
             // إرجاع صلاحيات كمصفوفة إذا كانت مخزنة بشكل آخر
@@ -1202,6 +1306,7 @@ function App(){
                 setLoginPass('');
                 setLoginErr('');
                 setToast({ text: '✅ تم تسجيل الدخول بنجاح', type: 'success' });
+                try { window.Log && window.Log.loginSuccess && window.Log.loginSuccess(loginUser); } catch(_) {}
               });
         } catch (err) {
           console.error(err);
@@ -1211,6 +1316,7 @@ function App(){
     } catch (err) {
       console.error(err);
       setLoginErr('⚠️ حدث خطأ أثناء تسجيل الدخول');
+      try { window.Log && window.Log.loginFail && window.Log.loginFail(loginUser); } catch(_) {}
     }
   };
 
@@ -1219,6 +1325,7 @@ function App(){
     try { localStorage.removeItem('taif:session'); } catch (_) {}
     setCurrentUser(null);
     setLoginModalOpen(true);
+    try { window.Log && window.Log.logout && window.Log.logout((currentUser && currentUser.username) || ''); } catch(_) {}
   };
 
   // فحص صلاحيات المستخدم: يرجع true إذا كان المستخدم يملك صلاحيات كاملة (سواء سوبرأدمن أو حساب الطوارئ)، أو يملك الصلاحية المطلوبة صراحةً
@@ -2117,41 +2224,17 @@ const saveSnapshot = (partial={}) => {
             {logsList.length === 0 ? (
               <div className="text-center py-4">لا توجد سجلات</div>
             ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th className="border-b p-1 text-right">التاريخ</th>
-                    <th className="border-b p-1 text-right">العملية</th>
-                    <th className="border-b p-1 text-right">منفذ العملية</th>
-                    <th className="border-b p-1 text-right">الهدف</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logsList.map((lg, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="p-1 align-top">{lg.at ? new Date(lg.at).toLocaleString() : ''}</td>
-                      <td className="p-1 align-top">{
-                        ({
-                          addUser: 'إضافة مستخدم',
-                          updateUser: 'تعديل مستخدم',
-                          deleteUser: 'حذف مستخدم',
-                          addCurrency: 'إضافة عملة',
-                          editCurrency: 'تعديل عملة',
-                          deleteCurrency: 'حذف عملة',
-                          editBanner: 'تعديل الإعلانات',
-                          changeView: 'تغيير طريقة العرض',
-                          changeTheme: 'تغيير الثيم',
-                          editLogo: 'تعديل اللوغو/العنوان',
-                          adjustDatetime: 'تعديل الوقت',
-                          editUSD: 'تعديل الدولار',
-                          bulkEdit: 'تعديل كل العملات', editData: 'تعديل الأسعار', resetBase: 'تحديث خط الأساس اليومي', clearLogs: 'مسح السجل' })[lg.action] || lg.action
-                      }</td>
-                      <td className="p-1 align-top">{lg.actor || ''}</td>
-                      <td className="p-1 align-top">{prettyTarget(lg.target)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="space-y-1 max-h-[60vh] overflow-y-auto pr-1">
+  {logsList.map((lg, idx) => (
+    <div key={idx} className="flex items-start justify-between gap-3 border-b border-gray-600/20 py-1">
+      <div className="text-xs opacity-70 whitespace-nowrap">{fmtDT(lg.at)}</div>
+      <div className="text-sm flex-1 text-right">
+        <span className="mr-1">{ACTION_ICONS[lg.action] || '📌'}</span>
+        <span>{humanizeLog(lg)} — <span className="opacity-70">بواسطة {lg.actor || '—'}</span></span>
+      </div>
+    </div>
+  ))}
+</div>
             )}
           </div>
         </div>
@@ -2249,7 +2332,7 @@ const saveSnapshot = (partial={}) => {
         <div className="flex justify-end gap-2 pt-4">
           <Btn className="text-white bg-red-600 w-28 h-11" onClick={()=>{ setModal(null); setToast({text:"❌ تم الإلغاء",type:"error"})}}>إلغاء</Btn>
           <Btn className="text-white bg-green-600 w-28 h-11" onClick={()=>{
-            if(editIdx != null){
+            if(editIdx != null){ try { var it = (Array.isArray(data) && data[editIdx]) || null; if (it && it.code) { window.Log && window.Log.logEvent && window.Log.logEvent('حذف عملة', (it.name||it.code) + ' (' + it.code + ')'); } } catch(_) {} 
               setData(prev => prev.filter((_,i)=>i!==editIdx));
             }
             setModal(null);
@@ -2704,7 +2787,7 @@ const FormCurrency=({data,editIdx,onCancel,onSaved,setToast})=>{
         const item={...f,code,name,ratioBuy:rB,ratioSell:rS,method:m,flag:f.flag||"🏳️"};
           const list=[...data];
           if(editIdx!=null) list[editIdx]=item; else list.push(item);
-          onSaved(list);
+          onSaved(list); try { if (editIdx==null) { window.Log && window.Log.logEvent && window.Log.logEvent('إضافة عملة', (f.name||code) + ' (' + code + ')'); } } catch(_) {}
           setToast({text:"✅ تم الحفظ",type:"success"});
         }}>حفظ</Btn>
     </div>
@@ -2713,58 +2796,45 @@ const FormCurrency=({data,editIdx,onCancel,onSaved,setToast})=>{
 /* ================== تشغيل التطبيق ================== */
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
-<!-- Runtime Smart Log Proxy (no Babel, no Arabic, safe) -->
-<script>
-(function(){
-  function safeLog(action, target){
-    try{
-      var sess = null;
-      try { sess = JSON.parse(localStorage.getItem('taif:session')||'null'); } catch(_){}
-      var actor = (sess && sess.username) ? sess.username : 'system';
-      if (!window.$db) return;
-      var id = Date.now() + '_' + Math.random().toString(36).slice(2);
-      var log = {  actor: actor, action: action, target: target };
-      window.$db.set(window.$db.ref('taif/adminactionslog/' + id), log);
-    }catch(e){ /* swallow */ }
+<!-- سجل الإدارة (العربي) v2.0.0.0 --><script>(function(){ "use strict"; function readJSON(k, d){ try{ return JSON.parse(localStorage.getItem(k)||"null") ?? d; }catch(_){ return d; } } function getActor(){ var s = readJSON('taif:session', null); var name = (s && (s.name || s.displayName)) || null; var user = (s && s.username) || null; return name || user || 'anon'; } function fmt(n){ try{ if(n === undefined || n === null || n === '') return ''; var num = Number(n); if (!isFinite(num)) return String(n); return num.toLocaleString('ar-EG'); }catch(_){ return String(n); } } function insertRow(row){ if (!window.$db) return; try{ var id = Date.now() + '_' + Math.random().toString(36).slice(2); window.$db.set(window.$db.ref('taif/adminactionslog/' + id), row); }catch(_){} } window.Log = Object.assign(window.Log||{}, { logEvent: function(actionAr, detailsAr, actor){ insertRow({ actor: actor || getActor(), action: actionAr, target: detailsAr || '' }); }, loginSuccess: function(username){ insertRow({ actor: username || getActor(), action: 'تسجيل الدخول (نجاح)', target: '' }); }, loginFail: function(username){ insertRow({ actor: username || getActor(), action: 'تسجيل الدخول (فشل)', target: '' }); }, logout: function(username){ insertRow({ actor: username || getActor(), action: 'تسجيل خروج', target: '' }); } }); var __lastData = null; var __lastUsers = {}; var __lastBanner = null; function ensureSnapshots(){ try{ if (window.$db && !window.__log_snapshots_bound){ window.__log_snapshots_bound = true; try { window.$db.onValue(window.$db.ref('taif/data'), function(s){ __lastData = s && s.val && s.val(); }); } catch(_){} try { window.$db.onValue(window.$db.ref('taif/users'), function(s){ __lastUsers = (s && s.val && s.val()) || {}; }); } catch(_){} } }catch(_){} } function diffCurrencies(oldArr, newArr){ var res = { changed: [], usd: null }; try{ var byCodeOld = Object.create(null), byCodeNew = Object.create(null); (Array.isArray(oldArr)?oldArr:[]).forEach(function(o){ if(o && o.code) byCodeOld[o.code]=o; }); (Array.isArray(newArr)?newArr:[]).forEach(function(o){ if(o && o.code) byCodeNew[o.code]=o; }); var oU = byCodeOld['USD']||{}, nU = byCodeNew['USD']||{}; if ((oU.buy !== nU.buy) || (oU.sell !== nU.sell)){ res.usd = { oldBuy:oU.buy, newBuy:nU.buy, oldSell:oU.sell, newSell:nU.sell }; } Object.keys(byCodeNew).forEach(function(code){ if (code === 'USD') return; var o = byCodeOld[code]||{}, n = byCodeNew[code]||{}; var changed = false; ['ratioBuy','ratioSell','method','buy','sell'].forEach(function(k){ if (o[k] !== n[k]) changed = true; }); if (changed){ res.changed.push({ code: code, name: n.name || o.name || code, oldBuy: o.buy, newBuy: n.buy, oldSell: o.sell, newSell: n.sell, oldRB: o.ratioBuy, newRB: n.ratioBuy, oldRS: o.ratioSell, newRS: n.ratioSell, oldMethod:(o.method||''), newMethod:(n.method||'') }); } }); }catch(_){} return res; } function install(){ if(!window.$db || window.$db.__logWrappedV2) return; ensureSnapshots(); var origSet = window.$db.set.bind(window.$db); window.$db.set = async function(refOrPath, value){ var key = (typeof refOrPath === 'string') ? refOrPath : (refOrPath && refOrPath.key); var actor = getActor(); var res = await origSet(refOrPath, value); try{ if(!key) return res; if (key === 'taif/data' && Array.isArray(value)){ var d = diffCurrencies(__lastData, value); if (d && d.usd){ var m = []; if (d.usd.oldBuy !== d.usd.newBuy) m.push('شراء ' + fmt(d.usd.oldBuy) + ' ← ' + fmt(d.usd.newBuy)); if (d.usd.oldSell !== d.usd.newSell) m.push('مبيع ' + fmt(d.usd.oldSell) + ' ← ' + fmt(d.usd.newSell)); insertRow({ actor: actor, action: 'تعديل الدولار', target: m.join(' | ') }); } if (d && d.changed && d.changed.length){ if (d.changed.length === 1){ var c = d.changed[0]; var msg = ''; if (c.newBuy !== undefined && c.oldBuy !== undefined && (c.oldBuy !== c.newBuy)){ msg += 'شراء ' + fmt(c.oldBuy) + ' ← ' + fmt(c.newBuy); } if (c.newSell !== undefined && c.oldSell !== undefined && (c.oldSell !== c.newSell)){ if (msg) msg += ' | '; msg += 'مبيع ' + fmt(c.oldSell) + ' ← ' + fmt(c.newSell); } if (!msg){ msg = 'نِسَب شراء ' + fmt(c.oldRB) + ' ← ' + fmt(c.newRB) + ' | نِسَب مبيع ' + fmt(c.oldRS) + ' ← ' + fmt(c.newRS); } if (c.oldMethod !== c.newMethod){ if(msg) msg += ' | '; var nameOld=(c.oldMethod==='divide'?'قسمة':(c.oldMethod==='multiply'?'ضرب':String(c.oldMethod||''))); var nameNew=(c.newMethod==='divide'?'قسمة':(c.newMethod==='multiply'?'ضرب':String(c.newMethod||''))); msg += 'الطريقة ' + (nameOld||'—') + ' ← ' + (nameNew||'—'); }
+insertRow({ actor: actor, action: 'تعديل عملة', target: c.name + ' (' + c.code + ') — ' + msg }); } else { insertRow({ actor: actor, action: 'تعديل جميع العملات', target: '(' + d.changed.length + ' عملات)' });
+d.changed.forEach(function(c){
+  var msg = '';
+  if (c.oldRB !== undefined && c.newRB !== undefined) msg += 'نِسَب شراء ' + fmt(c.oldRB) + ' ← ' + fmt(c.newRB);
+  if (c.oldRS !== undefined && c.newRS !== undefined){ if(msg) msg += ' | '; msg += 'نِسَب مبيع ' + fmt(c.oldRS) + ' ← ' + fmt(c.newRS); }
+  if (c.oldBuy !== undefined && c.newBuy !== undefined){ if(msg) msg += ' | '; msg += 'شراء ' + fmt(c.oldBuy) + ' ← ' + fmt(c.newBuy); }
+  if (c.oldSell !== undefined && c.newSell !== undefined){ if(msg) msg += ' | '; msg += 'مبيع ' + fmt(c.oldSell) + ' ← ' + fmt(c.newSell); }
+  if (c.oldMethod !== c.newMethod){ if(msg) msg += ' | '; var nameOld=(c.oldMethod==='divide'?'قسمة':(c.oldMethod==='multiply'?'ضرب':String(c.oldMethod||''))); var nameNew=(c.newMethod==='divide'?'قسمة':(c.newMethod==='multiply'?'ضرب':String(c.newMethod||''))); msg += 'الطريقة ' + (nameOld||'—') + ' ← ' + (nameNew||'—'); }
+insertRow({ actor: actor, action: 'تعديل عملة', target: c.name + ' (' + (c.code||'') + ') — ' + msg });
+}); } } } else if (key === 'taif/banner' || key === 'taif:banner:v2'){
+  try{
+    var oldB = (__lastBanner && Array.isArray(__lastBanner.texts)) ? __lastBanner.texts.slice() : [];
+    var newB = (value && Array.isArray(value.texts)) ? value.texts.slice() : [];
+    var diffs = [];
+    var max = Math.max(oldB.length, newB.length);
+    for (var i=0;i<max;i++){
+      var o = (oldB[i]||"").trim(), n = (newB[i]||"").trim();
+      if (o && !n) diffs.push("❌ حذف: " + o);
+      else if (!o && n) diffs.push("➕ إضافة: " + n);
+      else if (o !== n) diffs.push("✏️ تعديل: " + o + " ← " + n);
+    }
+    var msg = diffs.length ? diffs.join(" | ") : "لم يتم تغيير النصوص ("+newB.length+" عنصر)";
+    insertRow({ actor: actor, action: 'إعدادات الإعلانات', target: msg });
+    __lastBanner = value;
+  }catch(_){
+    var count = (value && Array.isArray(value.texts)) ? value.texts.length : 0;
+    insertRow({ actor: actor, action: 'إعدادات الإعلانات', target: '(' + count + ' عنصر)' });
   }
-  function install(){
-    if(!window.$db || window.$db.__wrapped) return;
-    var origSet = window.$db.set.bind(window.$db);
-    window.$db.set = async function(refOrPath, value){
-      var key = (typeof refOrPath === 'string') ? refOrPath : (refOrPath && refOrPath.key);
-      var res = await origSet(refOrPath, value);
-      try{
-        if(!key) return res;
-        // Map keys to actions
-        var map = {
-          'taif/data':'editData',
-          'taif/banner':'editBanner',
-          'taif/title':'editTitle',
-          'taif/logo':'editLogo',
-          'taif/bannerImg':'editBannerImg',
-          'taif/datetime':'adjustDatetime',
-          'taif/base':'resetBase'
-        };
-        if (map[key]) {
-          safeLog(map[key], key);
-        } else if (key === 'taif/adminactionslog' && (value === null || value === undefined)) {
-          safeLog('clearLogs', 'adminactionslog');
-        } else if (String(key).startsWith('taif/users/')) {
-          safeLog('saveUser', key);
-        }
-      }catch(e){ /* ignore */ }
-      return res;
-    };
-    window.$db.__wrapped = true;
-  }
-  if (document.readyState === 'complete' || document.readyState === 'interactive'){
-    install();
-  } else {
-    document.addEventListener('DOMContentLoaded', install);
-  }
-  window.addEventListener('db-ready', install);
-})();
-</script>
+}
+ else if (key === 'taif/base'){
+   try{
+     var dte = (value && value.date) ? String(value.date) : '';
+     var cnt = 0;
+     try { cnt = value && value.base ? Object.keys(value.base).length : 0; } catch(_){}
+     insertRow({ actor: actor, action: 'resetBase', target: (dte ? ('بتاريخ ' + dte + ' — ') : '') + '(' + cnt + ' عملات)' });
+   }catch(_){}
+ }
+ else if (key === 'taif/title'){ insertRow({ actor: actor, action: 'تغيير الهوية', target: 'تم تغيير العنوان إلى “' + String(value||'') + '”' }); } else if (key === 'taif/logo'){ insertRow({ actor: actor, action: 'تغيير الهوية', target: 'تم تغيير اللوغو' }); } else if (key === 'taif/bannerImg'){ insertRow({ actor: actor, action: 'تغيير الهوية', target: 'تم تغيير صورة الواجهة' }); } else if (key === 'taif/datetime' && value && typeof value === 'object'){ var t = (value.time ? String(value.time) : ''); var dte = (value.date ? String(value.date) : ''); insertRow({ actor: actor, action: 'تغيير الوقت', target: 'إلى ' + t + ' بتاريخ ' + dte }); } else if (key === 'taif/adminactionslog' && (value === null || value === undefined)){ insertRow({ actor: actor, action: 'مسح السجل', target: '' }); } else if (String(key).startsWith('taif/users/')){ var uname = String(key).split('/')[2] || ''; var before = __lastUsers && __lastUsers[uname]; if (value === null || value === undefined){ insertRow({ actor: actor, action: 'حذف مستخدم', target: '(' + uname + ')' }); } else if (!before){ var nm = (value && (value.name || value.username)) || uname; insertRow({ actor: actor, action: 'إضافة مستخدم', target: '(' + nm + ')' }); } else { var nm2 = (value && (value.name || value.username)) || uname; insertRow({ actor: actor, action: 'تعديل مستخدم', target: '(' + nm2 + ')' }); } } }catch(_){} return res; }; window.$db.__logWrappedV2 = true; } if (document.readyState === 'complete' || document.readyState === 'interactive'){ install(); } else { document.addEventListener('DOMContentLoaded', install); } window.addEventListener('db-ready', install); })();</script></script>
 
 
 <script>
@@ -2815,5 +2885,24 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 })();
 </script>
 
+<script>
+// PhaseB: guard write to taif/base outside midnight
+const origSetB = window.$db && window.$db.set ? window.$db.set.bind(window.$db) : null;
+if(origSetB){
+  window.$db.set = async function(refOrPath,value){
+    try{
+      var key = typeof refOrPath==='string'?refOrPath:(refOrPath&&refOrPath.key);
+      if(key==='taif/base'){
+        var now=new Date(); if(!(now.getHours()===0 && now.getMinutes()===0)){
+          console.warn('⛔ Attempt to modify taif/base outside midnight blocked');
+          try{ window.Log && window.Log.logEvent && window.Log.logEvent('resetBase', 'مرفوض — خارج منتصف الليل'); }catch(_){}
+          return;
+        }
+      }
+    }catch(_){}
+    return origSetB(refOrPath,value);
+  };
+}
+</script>
 </body>
 </html>
