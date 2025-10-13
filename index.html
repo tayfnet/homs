@@ -1040,6 +1040,49 @@ function App(){
     };
   }, []);
 
+  // ====== مراقبة نوع الاتصال (واي فاي / بيانات) ======
+  // بعض المتصفحات تدعم واجهة Network Information API والتي تُمكننا من معرفة نوع الشبكة.
+  const [connType, setConnType] = useState(() => {
+    try {
+      const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      return (c && (c.effectiveType || c.type)) || "";
+    } catch (_) {
+      return "";
+    }
+  });
+  const prevConnType = useRef(connType);
+  useEffect(() => {
+    const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!c) return;
+    const updateConn = () => {
+      const t = c.effectiveType || c.type || "";
+      setConnType(t);
+    };
+    updateConn();
+    try {
+      c.addEventListener('change', updateConn);
+    } catch (_) {
+      // بعض المتصفحات تستخدم addEventListener غير مدعومة، نستبدلها ب onchange.
+      c.onchange = updateConn;
+    }
+    return () => {
+      try {
+        c.removeEventListener('change', updateConn);
+      } catch (_) {
+        c.onchange = null;
+      }
+    };
+  }, []);
+  useEffect(() => {
+    // عندما يتحول نوع الاتصال إلى بيانات الجوال أظهر توست تحذيري
+    if (prevConnType.current === connType) return;
+    const type = connType ? connType.toLowerCase() : "";
+    const isCellular = type.includes('cell') || /(2g|3g|4g|5g)/.test(type);
+    if (isCellular) {
+      setToast({ text: "⚠️ أنت تستخدم بيانات الجوال — الرجاء استخدم VPN أو واي فاي", type: "error" });
+    }
+    prevConnType.current = connType;
+  }, [connType]);
   // ====== التحقق من الإصدار (يعتمد فقط على رقم الإصدار) ======
   useEffect(()=>{
     try {
@@ -1827,7 +1870,8 @@ const saveSnapshot = (partial={}) => {
           saveJSON(K.DATA, { data: v });
         } else {
           // إذا القاعدة فاضية لأول مرة → نرفع DEFAULT_DATA
-setData(DEFAULT_DATA);
+          window.$db.set(window.$db.ref('taif/data'), DEFAULT_DATA);
+          setData(DEFAULT_DATA);
           saveSnapshot({ data: DEFAULT_DATA });
           saveJSON(K.DATA, { data: DEFAULT_DATA });
         }
@@ -1886,9 +1930,8 @@ setData(DEFAULT_DATA);
             window.$db.onValue(window.$db.ref('taif/base'), (snap) => {
         _synced.current.base = true;
         const v = snap.val();
-        if (!v || !v.date || !v.base) {
-          // The remote base does not exist yet.  Initialise it from
-          // the local cache or current data.
+                if (!v || !v.date || !v.base) {
+          hasRemoteBase.current = false;
           let newBase;
           let newDate;
           const localBase = baseRef.current;
@@ -1903,23 +1946,10 @@ setData(DEFAULT_DATA);
             });
             newDate = today();
           }
-
-          // Update the local state and snapshot.
           _remote.current.base = true;
           setBase(newBase);
           setBaseDate(newDate);
           saveSnapshot({ base: newBase, baseDate: newDate });
-
-          try {
-            // Write the new base to Supabase and mark as existing.
-            hasRemoteBase.current = true;
-            _remote.current.base = true;
-            
-// Ensure a daily lock exists for this base date.  This lock indicates
-            // that the base for the day has been initialised and should not be
-            // reset again.  It is written regardless of the current time.
-            window.$db.set(window.$db.ref('locks/base-' + newDate), { at: Date.now() });
-          } catch (_) {}
           return;
         }
                 const cleaned = {};
@@ -1940,11 +1970,6 @@ setData(DEFAULT_DATA);
           setBase(cleaned);
           setBaseDate(remoteDate);
           saveSnapshot({ base: cleaned, baseDate: remoteDate });
-          // Create or update the daily base lock to signal that the base has
-          // been processed for this date.
-          try {
-            window.$db.set(window.$db.ref('locks/base-' + remoteDate), { at: Date.now() });
-          } catch (_) {}
           return;
         }
                 const currentBase = baseRef.current;
@@ -1953,21 +1978,21 @@ setData(DEFAULT_DATA);
           setBase(cleaned);
           setBaseDate(remoteDate);
           saveSnapshot({ base: cleaned, baseDate: remoteDate });
-          try {
-            window.$db.set(window.$db.ref('locks/base-' + remoteDate), { at: Date.now() });
-          } catch (_) {}
         }
-        // Always ensure the lock exists even if the base was not updated above.
-        try {
-          window.$db.set(window.$db.ref('locks/base-' + remoteDate), { at: Date.now() });
-        } catch (_) {}
                 return;
       });
 
-        // Note: writing the initial base to Supabase is now performed inside
-        // the onValue listener for `taif/base` above.  This prevents multiple
-        // writes on every page load by waiting for the remote value to be
-        // resolved first before creating a new one if necessary.
+                  try {
+                const b = baseRef.current;
+        const d = baseDateRef.current;
+        if (!hasRemoteBase.current && b && Object.keys(b).length > 0 && d) {
+          // عند كتابة خط الأساس لأول مرة، نعدّل العلامات لمنع الكتابة المكررة
+          // قم بتعيين hasRemoteBase ليتصرف كما لو أن القاعدة موجودة لتجنّب عمليات الكتابة المزدوجة
+          hasRemoteBase.current = true;
+          _remote.current.base = true;
+          window.$db.set(window.$db.ref('taif/base'), { date: d, base: b });
+        }
+      } catch (_) {}
     };
     if (window.$db) setup();
     else {
@@ -2824,7 +2849,7 @@ const FormCurrency=({data,editIdx,onCancel,onSaved,setToast})=>{
 /* ================== تشغيل التطبيق ================== */
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
-<!-- سجل الإدارة (العربي) v2.0.1.0 --><script>(function(){ "use strict"; function readJSON(k, d){ try{ return JSON.parse(localStorage.getItem(k)||"null") ?? d; }catch(_){ return d; } } function getActor(){ var s = readJSON('taif:session', null); var name = (s && (s.name || s.displayName)) || null; var user = (s && s.username) || null; return name || user || 'anon'; } function fmt(n){ try{ if(n === undefined || n === null || n === '') return ''; var num = Number(n); if (!isFinite(num)) return String(n); return num.toLocaleString('ar-EG'); }catch(_){ return String(n); } } function insertRow(row){ if (!window.$db) return; try{ var id = Date.now() + '_' + Math.random().toString(36).slice(2); window.$db.set(window.$db.ref('taif/adminactionslog/' + id), row); }catch(_){} } window.Log = Object.assign(window.Log||{}, { logEvent: function(actionAr, detailsAr, actor){ insertRow({ actor: actor || getActor(), action: actionAr, target: detailsAr || '' }); }, loginSuccess: function(username){ insertRow({ actor: username || getActor(), action: 'تسجيل الدخول (نجاح)', target: '' }); }, loginFail: function(username){ insertRow({ actor: username || getActor(), action: 'تسجيل الدخول (فشل)', target: '' }); }, logout: function(username){ insertRow({ actor: username || getActor(), action: 'تسجيل خروج', target: '' }); } }); var __lastData = null; var __lastUsers = {}; var __lastBanner = null; function ensureSnapshots(){ try{ if (window.$db && !window.__log_snapshots_bound){ window.__log_snapshots_bound = true; try { window.$db.onValue(window.$db.ref('taif/data'), function(s){ __lastData = s && s.val && s.val(); }); } catch(_){} try { window.$db.onValue(window.$db.ref('taif/users'), function(s){ __lastUsers = (s && s.val && s.val()) || {}; }); } catch(_){} } }catch(_){} } function diffCurrencies(oldArr, newArr){ var res = { changed: [], usd: null }; try{ var byCodeOld = Object.create(null), byCodeNew = Object.create(null); (Array.isArray(oldArr)?oldArr:[]).forEach(function(o){ if(o && o.code) byCodeOld[o.code]=o; }); (Array.isArray(newArr)?newArr:[]).forEach(function(o){ if(o && o.code) byCodeNew[o.code]=o; }); var oU = byCodeOld['USD']||{}, nU = byCodeNew['USD']||{}; if ((oU.buy !== nU.buy) || (oU.sell !== nU.sell)){ res.usd = { oldBuy:oU.buy, newBuy:nU.buy, oldSell:oU.sell, newSell:nU.sell }; } Object.keys(byCodeNew).forEach(function(code){ if (code === 'USD') return; var o = byCodeOld[code]||{}, n = byCodeNew[code]||{}; var changed = false; ['ratioBuy','ratioSell','method','buy','sell'].forEach(function(k){ if (o[k] !== n[k]) changed = true; }); if (changed){ res.changed.push({ code: code, name: n.name || o.name || code, oldBuy: o.buy, newBuy: n.buy, oldSell: o.sell, newSell: n.sell, oldRB: o.ratioBuy, newRB: n.ratioBuy, oldRS: o.ratioSell, newRS: n.ratioSell, oldMethod:(o.method||''), newMethod:(n.method||'') }); } }); }catch(_){} return res; } function install(){ if(!window.$db || window.$db.__logWrappedV2) return; ensureSnapshots(); var origSet = window.$db.set.bind(window.$db); window.$db.set = async function(refOrPath, value){ var key = (typeof refOrPath === 'string') ? refOrPath : (refOrPath && refOrPath.key); var actor = getActor(); var res = await origSet(refOrPath, value); try{ if(!key) return res; if (key === 'taif/data' && Array.isArray(value)){ var d = diffCurrencies(__lastData, value); if (d && d.usd){ var m = []; if (d.usd.oldBuy !== d.usd.newBuy) m.push('شراء ' + fmt(d.usd.oldBuy) + ' ← ' + fmt(d.usd.newBuy)); if (d.usd.oldSell !== d.usd.newSell) m.push('مبيع ' + fmt(d.usd.oldSell) + ' ← ' + fmt(d.usd.newSell)); insertRow({ actor: actor, action: 'تعديل الدولار', target: m.join(' | ') }); } if (d && d.changed && d.changed.length){ if (d.changed.length === 1){ var c = d.changed[0]; var msg = ''; if (c.newBuy !== undefined && c.oldBuy !== undefined && (c.oldBuy !== c.newBuy)){ msg += 'شراء ' + fmt(c.oldBuy) + ' ← ' + fmt(c.newBuy); } if (c.newSell !== undefined && c.oldSell !== undefined && (c.oldSell !== c.newSell)){ if (msg) msg += ' | '; msg += 'مبيع ' + fmt(c.oldSell) + ' ← ' + fmt(c.newSell); } if (!msg){ msg = 'نِسَب شراء ' + fmt(c.oldRB) + ' ← ' + fmt(c.newRB) + ' | نِسَب مبيع ' + fmt(c.oldRS) + ' ← ' + fmt(c.newRS); } if (c.oldMethod !== c.newMethod){ if(msg) msg += ' | '; var nameOld=(c.oldMethod==='divide'?'قسمة':(c.oldMethod==='multiply'?'ضرب':String(c.oldMethod||''))); var nameNew=(c.newMethod==='divide'?'قسمة':(c.newMethod==='multiply'?'ضرب':String(c.newMethod||''))); msg += 'الطريقة ' + (nameOld||'—') + ' ← ' + (nameNew||'—'); }
+<!-- سجل الإدارة (العربي) v2.0.0.0 --><script>(function(){ "use strict"; function readJSON(k, d){ try{ return JSON.parse(localStorage.getItem(k)||"null") ?? d; }catch(_){ return d; } } function getActor(){ var s = readJSON('taif:session', null); var name = (s && (s.name || s.displayName)) || null; var user = (s && s.username) || null; return name || user || 'anon'; } function fmt(n){ try{ if(n === undefined || n === null || n === '') return ''; var num = Number(n); if (!isFinite(num)) return String(n); return num.toLocaleString('ar-EG'); }catch(_){ return String(n); } } function insertRow(row){ if (!window.$db) return; try{ var id = Date.now() + '_' + Math.random().toString(36).slice(2); window.$db.set(window.$db.ref('taif/adminactionslog/' + id), row); }catch(_){} } window.Log = Object.assign(window.Log||{}, { logEvent: function(actionAr, detailsAr, actor){ insertRow({ actor: actor || getActor(), action: actionAr, target: detailsAr || '' }); }, loginSuccess: function(username){ insertRow({ actor: username || getActor(), action: 'تسجيل الدخول (نجاح)', target: '' }); }, loginFail: function(username){ insertRow({ actor: username || getActor(), action: 'تسجيل الدخول (فشل)', target: '' }); }, logout: function(username){ insertRow({ actor: username || getActor(), action: 'تسجيل خروج', target: '' }); } }); var __lastData = null; var __lastUsers = {}; var __lastBanner = null; function ensureSnapshots(){ try{ if (window.$db && !window.__log_snapshots_bound){ window.__log_snapshots_bound = true; try { window.$db.onValue(window.$db.ref('taif/data'), function(s){ __lastData = s && s.val && s.val(); }); } catch(_){} try { window.$db.onValue(window.$db.ref('taif/users'), function(s){ __lastUsers = (s && s.val && s.val()) || {}; }); } catch(_){} } }catch(_){} } function diffCurrencies(oldArr, newArr){ var res = { changed: [], usd: null }; try{ var byCodeOld = Object.create(null), byCodeNew = Object.create(null); (Array.isArray(oldArr)?oldArr:[]).forEach(function(o){ if(o && o.code) byCodeOld[o.code]=o; }); (Array.isArray(newArr)?newArr:[]).forEach(function(o){ if(o && o.code) byCodeNew[o.code]=o; }); var oU = byCodeOld['USD']||{}, nU = byCodeNew['USD']||{}; if ((oU.buy !== nU.buy) || (oU.sell !== nU.sell)){ res.usd = { oldBuy:oU.buy, newBuy:nU.buy, oldSell:oU.sell, newSell:nU.sell }; } Object.keys(byCodeNew).forEach(function(code){ if (code === 'USD') return; var o = byCodeOld[code]||{}, n = byCodeNew[code]||{}; var changed = false; ['ratioBuy','ratioSell','method','buy','sell'].forEach(function(k){ if (o[k] !== n[k]) changed = true; }); if (changed){ res.changed.push({ code: code, name: n.name || o.name || code, oldBuy: o.buy, newBuy: n.buy, oldSell: o.sell, newSell: n.sell, oldRB: o.ratioBuy, newRB: n.ratioBuy, oldRS: o.ratioSell, newRS: n.ratioSell, oldMethod:(o.method||''), newMethod:(n.method||'') }); } }); }catch(_){} return res; } function install(){ if(!window.$db || window.$db.__logWrappedV2) return; ensureSnapshots(); var origSet = window.$db.set.bind(window.$db); window.$db.set = async function(refOrPath, value){ var key = (typeof refOrPath === 'string') ? refOrPath : (refOrPath && refOrPath.key); var actor = getActor(); var res = await origSet(refOrPath, value); try{ if(!key) return res; if (key === 'taif/data' && Array.isArray(value)){ var d = diffCurrencies(__lastData, value); if (d && d.usd){ var m = []; if (d.usd.oldBuy !== d.usd.newBuy) m.push('شراء ' + fmt(d.usd.oldBuy) + ' ← ' + fmt(d.usd.newBuy)); if (d.usd.oldSell !== d.usd.newSell) m.push('مبيع ' + fmt(d.usd.oldSell) + ' ← ' + fmt(d.usd.newSell)); insertRow({ actor: actor, action: 'تعديل الدولار', target: m.join(' | ') }); } if (d && d.changed && d.changed.length){ if (d.changed.length === 1){ var c = d.changed[0]; var msg = ''; if (c.newBuy !== undefined && c.oldBuy !== undefined && (c.oldBuy !== c.newBuy)){ msg += 'شراء ' + fmt(c.oldBuy) + ' ← ' + fmt(c.newBuy); } if (c.newSell !== undefined && c.oldSell !== undefined && (c.oldSell !== c.newSell)){ if (msg) msg += ' | '; msg += 'مبيع ' + fmt(c.oldSell) + ' ← ' + fmt(c.newSell); } if (!msg){ msg = 'نِسَب شراء ' + fmt(c.oldRB) + ' ← ' + fmt(c.newRB) + ' | نِسَب مبيع ' + fmt(c.oldRS) + ' ← ' + fmt(c.newRS); } if (c.oldMethod !== c.newMethod){ if(msg) msg += ' | '; var nameOld=(c.oldMethod==='divide'?'قسمة':(c.oldMethod==='multiply'?'ضرب':String(c.oldMethod||''))); var nameNew=(c.newMethod==='divide'?'قسمة':(c.newMethod==='multiply'?'ضرب':String(c.newMethod||''))); msg += 'الطريقة ' + (nameOld||'—') + ' ← ' + (nameNew||'—'); }
 insertRow({ actor: actor, action: 'تعديل عملة', target: c.name + ' (' + c.code + ') — ' + msg }); } else { insertRow({ actor: actor, action: 'تعديل جميع العملات', target: '(' + d.changed.length + ' عملات)' });
 d.changed.forEach(function(c){
   var msg = '';
