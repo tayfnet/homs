@@ -174,14 +174,21 @@ color-scheme:light;--firstcol-pr:32px}*{box-sizing:border-box}html,body{height:1
 (function(){
   const SUPABASE_URL = "https://ibbtgjheqdgcacmcbpaq.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImliYnRnamhlcWRnY2FjbWNicGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjkwMDQsImV4cCI6MjA3NTY0NTAwNH0.ymJHT9Qt7hFCPxTKHLexfoQ4mqo4igbCTu5mHjMgEHY";
+  // Reduce realtime events per second for better performance
   const client = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    realtime: { params: { eventsPerSecond: 10 } }
+    // The original config requested up to 10 events per second from Supabase's realtime service.
+    // Lowering this to 3 reduces the number of realtime messages and can help improve perceived responsiveness,
+    // especially on low‑power devices or slow network connections.
+    realtime: { params: { eventsPerSecond: 3 } }
   }) : null;
 
   const channels = new Map();
   const pollers = new Map();
-  const POLL_MS_VISIBLE = 2500;
-  const POLL_MS_HIDDEN  = 8000;
+  // Increase polling intervals to reduce CPU/network overhead.
+  // When the page/tab is visible we poll every 7 seconds instead of 2.5.
+  const POLL_MS_VISIBLE = 7000;
+  // When the page/tab is hidden we poll every 30 seconds instead of 8.
+  const POLL_MS_HIDDEN  = 30000;
   function __clearPoller(key){ try{ const t = pollers.get(key); if(t){ clearInterval(t); pollers.delete(key); } }catch(_){ } }
 
   function snap(val){ return { val: () => val }; }
@@ -202,10 +209,21 @@ color-scheme:light;--firstcol-pr:32px}*{box-sizing:border-box}html,body{height:1
     const { data } = await client
       .from('adminactionslog')
       .select('*')
+      // Exclude anonymous and system actors
       .neq('actor','anon')
       .neq('actor','system')
-      .order('at',{ascending:false});
-    const map = {}; (data||[]).filter(row => !['addUser','updateUser','deleteUser'].includes(String(row.action||''))).forEach(row=>{ const id=(row.at||Date.now())+'_'+Math.random().toString(36).slice(2); map[id]=row; }); return map;
+      // Retrieve the most recent records first and limit the number of rows
+      // to avoid downloading the entire history on every refresh.
+      .order('at',{ascending:false})
+      .limit(200);
+    const map = {};
+    (data || [])
+      .filter(row => !['addUser','updateUser','deleteUser'].includes(String(row.action || '')))
+      .forEach(row => {
+        const id = (row.at || Date.now()) + '_' + Math.random().toString(36).slice(2);
+        map[id] = row;
+      });
+    return map;
   }
 
   
@@ -398,6 +416,20 @@ const prettyTarget = (t='') => {
 
 
 /* ==== Live-perms Helpers (added) ==== */
+/* ==== Device Lock Helpers (single-device session) ==== */
+const DEVICE_KEY = 'taif:device_id';
+function ensureDeviceId(){
+  try{
+    let id = localStorage.getItem(DEVICE_KEY);
+    if(!id){
+      const rnd = (crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint32Array(4)) : new Uint32Array([Date.now() & 0xffffffff, Math.random()*1e9|0, Math.random()*1e9|0, Math.random()*1e9|0]);
+      id = 'dev_' + Array.from(rnd).map(n=>n.toString(16)).join('');
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  }catch(_){ return 'dev_fallback'; }
+}
+
 const arrEq = (a,b) => {
   if (!Array.isArray(a) || !Array.isArray(b)) return false;
   if (a.length !== b.length) return false;
@@ -1008,49 +1040,6 @@ function App(){
     };
   }, []);
 
-  // ====== مراقبة نوع الاتصال (واي فاي / بيانات) ======
-  // بعض المتصفحات تدعم واجهة Network Information API والتي تُمكننا من معرفة نوع الشبكة.
-  const [connType, setConnType] = useState(() => {
-    try {
-      const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-      return (c && (c.effectiveType || c.type)) || "";
-    } catch (_) {
-      return "";
-    }
-  });
-  const prevConnType = useRef(connType);
-  useEffect(() => {
-    const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (!c) return;
-    const updateConn = () => {
-      const t = c.effectiveType || c.type || "";
-      setConnType(t);
-    };
-    updateConn();
-    try {
-      c.addEventListener('change', updateConn);
-    } catch (_) {
-      // بعض المتصفحات تستخدم addEventListener غير مدعومة، نستبدلها ب onchange.
-      c.onchange = updateConn;
-    }
-    return () => {
-      try {
-        c.removeEventListener('change', updateConn);
-      } catch (_) {
-        c.onchange = null;
-      }
-    };
-  }, []);
-  useEffect(() => {
-    // عندما يتحول نوع الاتصال إلى بيانات الجوال أظهر توست تحذيري
-    if (prevConnType.current === connType) return;
-    const type = connType ? connType.toLowerCase() : "";
-    const isCellular = type.includes('cell') || /(2g|3g|4g|5g)/.test(type);
-    if (isCellular) {
-      setToast({ text: "⚠️ أنت تستخدم بيانات الجوال — الرجاء استخدم VPN أو واي فاي", type: "error" });
-    }
-    prevConnType.current = connType;
-  }, [connType]);
   // ====== التحقق من الإصدار (يعتمد فقط على رقم الإصدار) ======
   useEffect(()=>{
     try {
@@ -1166,6 +1155,7 @@ function App(){
     const unsub = window.$db.onValue(r, (snap) => {
       const obj = snap.val() || {};
       // حوّل الكائن إلى مصفوفة، ثم رتّبها تنازليًا حسب التاريخ
+      // حوّل الكائن إلى مصفوفة، ثم رتّبها تنازليًا حسب التاريخ
       const list = Object.values(obj).sort((a, b) => {
         const atA = a && a.at ? a.at : 0;
         const atB = b && b.at ? b.at : 0;
@@ -1268,35 +1258,54 @@ function App(){
             setLoginErr('⚠️ تعذر تحميل مكتبة التحقق');
             return;
           }
-          bcryptObj.compare(loginPass, hash, function(err, same) {
+          bcryptObj.compare(loginPass, hash, function(err, same) { 
             if (err || !same) {
               setLoginErr('⚠️ كلمة المرور غير صحيحة');
               try { window.Log && window.Log.loginFail && window.Log.loginFail(loginUser); } catch(_) {}
               return;
             }
-            // إرجاع صلاحيات كمصفوفة إذا كانت مخزنة بشكل آخر
+            // permissions array
             let perms = [];
             if (Array.isArray(obj.permissions)) perms = obj.permissions;
             else if (obj.permissions && typeof obj.permissions === 'object') {
-              // إذا كانت مخزنة ككائن {editUSD:true,...} نأخذ المفاتيح
               perms = Object.keys(obj.permissions).filter(k => obj.permissions[k]);
             }
-                const sess = {
-                  username: loginUser,
-                  role: obj.role || '',
-                  permissions: perms
-                };
-                try {
-                  localStorage.setItem('taif:session', JSON.stringify(sess));
-                } catch (_) {}
-                setCurrentUser(sess);
-                setLoginModalOpen(false);
-                setLoginUser('');
-                setLoginPass('');
-                setLoginErr('');
-                setToast({ text: '✅ تم تسجيل الدخول بنجاح', type: 'success' });
-                try { window.Log && window.Log.loginSuccess && window.Log.loginSuccess(loginUser); } catch(_) {}
+
+            // === Single-device lock ===
+            const deviceId = ensureDeviceId();
+            const lockKey  = `taif/session/${loginUser}`;
+            const lockRef  = window.$db.ref(lockKey);
+            const once = window.$db.onValue(lockRef, async (snap2) => {
+              if (once) window.$db.off(lockRef);
+              const lock = snap2 && snap2.val ? snap2.val() : null;
+              if (lock && lock.deviceId && lock.deviceId !== deviceId) {
+                setLoginErr('⛔ هذا الحساب مقفول على جهاز آخر. الرجاء تسجيل الخروج من الجهاز الأول أولاً.');
+                try { window.Log && window.Log.loginFail && window.Log.loginFail(loginUser); } catch(_) {}
+                return;
+              }
+              const token = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '_' + Math.random().toString(36).slice(2));
+              try { localStorage.setItem('taif:session_token', token); } catch(_){}
+
+              await window.$db.set(lockRef, {
+                deviceId,
+                token,
+                ua: navigator.userAgent,
+                lockedAt: Date.now(),
+                lastSeen: Date.now()
               });
+
+              const sess = { username: loginUser, role: obj.role || '', permissions: perms };
+              try { localStorage.setItem('taif:session', JSON.stringify(sess)); } catch (_) {}
+              setCurrentUser(sess);
+              setLoginModalOpen(false);
+              setLoginUser('');
+              setLoginPass('');
+              setLoginErr('');
+              setToast({ text: '✅ تم تسجيل الدخول بنجاح', type: 'success' });
+              try { window.Log && window.Log.loginSuccess && window.Log.loginSuccess(loginUser); } catch(_) {}
+            });
+        
+        });
         } catch (err) {
           console.error(err);
           setLoginErr('⚠️ حدث خطأ في التحقق من كلمة المرور');
@@ -1310,7 +1319,13 @@ function App(){
   };
 
   // تسجيل الخروج
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const me = currentUser && currentUser.username;
+      if (me) { await window.$db.set(window.$db.ref(`taif/session/${me}`), null); }
+      try { localStorage.removeItem('taif:session_token'); } catch(_){ }
+    } catch(_){ }
+
     try { localStorage.removeItem('taif:session'); } catch (_) {}
     setCurrentUser(null);
     setLoginModalOpen(true);
@@ -1872,8 +1887,9 @@ const saveSnapshot = (partial={}) => {
             window.$db.onValue(window.$db.ref('taif/base'), (snap) => {
         _synced.current.base = true;
         const v = snap.val();
-                if (!v || !v.date || !v.base) {
-          hasRemoteBase.current = false;
+        if (!v || !v.date || !v.base) {
+          // The remote base does not exist yet.  Initialise it from
+          // the local cache or current data.
           let newBase;
           let newDate;
           const localBase = baseRef.current;
@@ -1888,10 +1904,23 @@ const saveSnapshot = (partial={}) => {
             });
             newDate = today();
           }
+
+          // Update the local state and snapshot.
           _remote.current.base = true;
           setBase(newBase);
           setBaseDate(newDate);
           saveSnapshot({ base: newBase, baseDate: newDate });
+
+          try {
+            // Write the new base to Supabase and mark as existing.
+            hasRemoteBase.current = true;
+            _remote.current.base = true;
+            window.$db.set(window.$db.ref('taif/base'), { date: newDate, base: newBase });
+            // Ensure a daily lock exists for this base date.  This lock indicates
+            // that the base for the day has been initialised and should not be
+            // reset again.  It is written regardless of the current time.
+            window.$db.set(window.$db.ref('locks/base-' + newDate), { at: Date.now() });
+          } catch (_) {}
           return;
         }
                 const cleaned = {};
@@ -1912,6 +1941,11 @@ const saveSnapshot = (partial={}) => {
           setBase(cleaned);
           setBaseDate(remoteDate);
           saveSnapshot({ base: cleaned, baseDate: remoteDate });
+          // Create or update the daily base lock to signal that the base has
+          // been processed for this date.
+          try {
+            window.$db.set(window.$db.ref('locks/base-' + remoteDate), { at: Date.now() });
+          } catch (_) {}
           return;
         }
                 const currentBase = baseRef.current;
@@ -1920,18 +1954,21 @@ const saveSnapshot = (partial={}) => {
           setBase(cleaned);
           setBaseDate(remoteDate);
           saveSnapshot({ base: cleaned, baseDate: remoteDate });
+          try {
+            window.$db.set(window.$db.ref('locks/base-' + remoteDate), { at: Date.now() });
+          } catch (_) {}
         }
+        // Always ensure the lock exists even if the base was not updated above.
+        try {
+          window.$db.set(window.$db.ref('locks/base-' + remoteDate), { at: Date.now() });
+        } catch (_) {}
                 return;
       });
 
-                  try {
-                const b = baseRef.current;
-        const d = baseDateRef.current;
-        if (!hasRemoteBase.current && b && Object.keys(b).length > 0 && d) {
-          _remote.current.base = true;
-          window.$db.set(window.$db.ref('taif/base'), { date: d, base: b });
-        }
-      } catch (_) {}
+        // Note: writing the initial base to Supabase is now performed inside
+        // the onValue listener for `taif/base` above.  This prevents multiple
+        // writes on every page load by waiting for the remote value to be
+        // resolved first before creating a new one if necessary.
     };
     if (window.$db) setup();
     else {
@@ -2006,6 +2043,9 @@ const saveSnapshot = (partial={}) => {
     if (_remote.current.base) { _remote.current.base = false; return; }
             if (hasRemoteBase.current) return;
     try {
+      // عند دفع خط الأساس إلى Supabase من المتصفح المحلي، عيّن العلامات لعدم تكرار الكتابة
+      hasRemoteBase.current = true;
+      _remote.current.base = true;
       dbRef.current.set(
         dbRef.current.ref('taif/base'),
         { date: baseDate, base }
