@@ -2231,6 +2231,11 @@ function App() {
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
+  // Track whether there is remote data present. When no data exists in the
+  // backend (the value is null or not an array), we don't want to push any
+  // local defaults back up to the server. This flag is set when a valid
+  // array is observed from Supabase and remains false otherwise.
+  const hasRemoteData = useRef(false);
   const hasRemoteBase = useRef(false);
   useEffect(() => {
     try {
@@ -2522,16 +2527,17 @@ function App() {
         const v = snap.val();
         if (v && Array.isArray(v)) {
           _remote.current.data = true;
+          // mark that remote data exists so updates can be pushed
+          hasRemoteData.current = true;
           setData(v);
-          saveSnapshot({
-            data: v
-          });
-          saveJSON(K.DATA, {
-            data: v
-          });
+          // We intentionally do not save to local storage. Snapshots are only
+          // kept in memory and will not persist across sessions.
+          saveSnapshot({ data: v });
         } else {
           // When there is no data in the remote database, do not automatically push
           // the default data. Instead, warn the user and leave the data list empty.
+          // Mark that there is currently no remote data available.
+          hasRemoteData.current = false;
           setToast({ text: "⚠️ لا توجد بيانات في القاعدة — لن يتم رفع بيانات افتراضية", type: "warning" });
           setData([]);
         }
@@ -2701,6 +2707,12 @@ function App() {
       _remote.current.data = false;
       return;
     }
+    // Only push data back to Supabase if remote data exists. If there is no
+    // remote data, pushing an empty list would overwrite the server state and
+    // effectively delete all records. hasRemoteData is toggled in the
+    // subscription above when a valid array is observed. When it's false,
+    // skip the update.
+    if (!hasRemoteData.current) return;
     dbRef.current.set(dbRef.current.ref('taif/data'), data);
   }, [data]);
   React.useEffect(() => {
