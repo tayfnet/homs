@@ -1571,7 +1571,10 @@ function App() {
     const type = connType ? connType.toLowerCase() : "";
     const isCellular = type.includes('cell') || /(2g|3g|4g|5g)/.test(type);
     if (isCellular) {
-      
+      setToast({
+        text: "⚠️ أنت تستخدم بيانات الجوال — الرجاء استخدم VPN أو واي فاي",
+        type: "error"
+      });
     }
     prevConnType.current = connType;
   }, [connType]);
