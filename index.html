@@ -2,7 +2,7 @@
   
 <script id="version-guard-toast">
 (function() {
-  var CURRENT_VERSION = "2.2.0.0-stable-plus";
+  var CURRENT_VERSION = "2.0.0.0-stable-plus";
   var KEY = "taif:app_version";
   try {
     var saved = localStorage.getItem(KEY);
@@ -729,7 +729,7 @@ const useFocusTrap = (enabled, containerRef) => {
   }, [enabled, containerRef]);
 };
 const APP_VERSION = function () {
-  const fallback = "2.2.0.0-stable-plus";
+  const fallback = "2.0.0.0-stable-plus";
   try {
     return localStorage.getItem("taif:app_version") || fallback;
   } catch (_) {
@@ -749,46 +749,24 @@ const K = Object.freeze({
 });
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 365;
 const CACHE_KEY = "taif:cache";
-const loadCache = () => {
-  try {
-    return JSON.parse(localStorage.getItem(CACHE_KEY)) || null;
-  } catch {
-    return null;
-  }
-};
-const saveCache = obj => {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(obj));
-  } catch {}
-};
+// Disable cache loading and saving. Always return null for the cache and no‑op on save.
+const loadCache = () => null;
+const saveCache = obj => {};
 const __memKV = new Map();
+// Disable storage manager – it no longer persists anything locally.
 const StorageManager = (() => {
-  let _mem = null;
   return {
-    load: () => _mem,
-    save: obj => {
-      _mem = obj;
-    },
-    clear: () => {
-      _mem = null;
-    }
+    load: () => null,
+    save: obj => {},
+    clear: () => {}
   };
 })();
 const clamp = (n, min, max) => Math.min(Math.max(+n || 0, min), max);
 const toNum = v => +v || 0;
 const two = n => String(n).padStart(2, '0');
-const readJSON = (k, fb) => {
-  try {
-    return __memKV.has(k) ? __memKV.get(k) : fb;
-  } catch {
-    return fb;
-  }
-};
-const saveJSON = (k, v) => {
-  try {
-    __memKV.set(k, v);
-  } catch {}
-};
+// Disable JSON helpers – always fall back and never save.
+const readJSON = (k, fb) => fb;
+const saveJSON = (k, v) => {};
 const fmt = n => new Intl.NumberFormat('en-US').format(toNum(n));
 const isValidTime = s => /^([01]\d|2[0-3]):[0-5]\d$/.test((s || "").trim());
 const isValidDateDMY = s => {
@@ -1508,7 +1486,8 @@ function DatetimeModal({
   }, "\u062D\u0641\u0638")));
 }
 function App() {
-  const cachedApp = loadCache();
+  // Disable loading from cache: always start with null cached app
+  const cachedApp = null;
   const [lastSync, setLastSync] = useState(cachedApp?.lastSync || null);
   const [online, setOnline] = useState(navigator.onLine);
   const prevOnline = useRef(navigator.onLine);
@@ -1571,10 +1550,7 @@ function App() {
     const type = connType ? connType.toLowerCase() : "";
     const isCellular = type.includes('cell') || /(2g|3g|4g|5g)/.test(type);
     if (isCellular) {
-      setToast({
-        text: "⚠️ أنت تستخدم بيانات الجوال — الرجاء استخدم VPN أو واي فاي",
-        type: "error"
-      });
+      
     }
     prevConnType.current = connType;
   }, [connType]);
@@ -2308,9 +2284,8 @@ function App() {
   useEffect(() => {
     if (rows && rows.length) lastGoodRowsRef.current = rows;
   }, [rows]);
-  const rowsDisplay = useMemo(() => {
-    return online ? rows : lastGoodRowsRef.current.length ? lastGoodRowsRef.current : rows;
-  }, [rows, online]);
+  // When offline, do not fall back to stale snapshot; only use current rows.
+  const rowsDisplay = useMemo(() => rows, [rows]);
   const contRef = useRef(null),
     itemRef = useRef(null);
   const [ad, setAd] = useState({
@@ -2480,32 +2455,15 @@ function App() {
   const toggleMenu = () => setMenu(m => !m);
   const headerClass = headCls(theme),
     banClass = bannerCls(theme);
+  // Disable local snapshot persistence. This function now only updates the lastSync timestamp
+  // and does not write anything to memory or localStorage.
   const saveSnapshot = (partial = {}) => {
-    const current = StorageManager.load() || {};
     const snapshot = {
-      version: APP_VERSION,
       lastSync: new Date().toISOString(),
-      data,
-      banner,
-      title,
-      logo,
-      bannerImg,
-      datetime: {
-        ...dt,
-        autoTime
-      },
-      base,
-      baseDate,
-      theme,
-      view,
-      ...current,
       ...partial
     };
     setLastSync(snapshot.lastSync);
-    StorageManager.save(snapshot);
-    try {
-      saveCache(snapshot);
-    } catch (_) {}
+    // intentionally not saving snapshot to any storage
   };
   const dbRef = React.useRef(null);
   const _remote = React.useRef({
@@ -2572,14 +2530,10 @@ function App() {
             data: v
           });
         } else {
-          window.$db.set(window.$db.ref('taif/data'), DEFAULT_DATA);
-          setData(DEFAULT_DATA);
-          saveSnapshot({
-            data: DEFAULT_DATA
-          });
-          saveJSON(K.DATA, {
-            data: DEFAULT_DATA
-          });
+          // When there is no data in the remote database, do not automatically push
+          // the default data. Instead, warn the user and leave the data list empty.
+          setToast({ text: "⚠️ لا توجد بيانات في القاعدة — لن يتم رفع بيانات افتراضية", type: "warning" });
+          setData([]);
         }
       });
       window.$db.onValue(window.$db.ref('taif/banner'), snap => {
@@ -2713,18 +2667,7 @@ function App() {
         }
         return;
       });
-      try {
-        const b = baseRef.current;
-        const d = baseDateRef.current;
-        if (!hasRemoteBase.current && b && Object.keys(b).length > 0 && d) {
-          hasRemoteBase.current = true;
-          _remote.current.base = true;
-          window.$db.set(window.$db.ref('taif/base'), {
-            date: d,
-            base: b
-          });
-        }
-      } catch (_) {}
+      /* Autopush of base disabled – removed automatic upload when no remote base exists */
     };
     if (window.$db) setup();else {
       const onReady = () => {
@@ -2803,9 +2746,11 @@ function App() {
       _remote.current.base = false;
       return;
     }
-    if (hasRemoteBase.current) return;
+    // If remote base does not exist yet, do not automatically push a new base. Only update the remote base when there is an existing remote copy.
+    if (!hasRemoteBase.current) {
+      return;
+    }
     try {
-      hasRemoteBase.current = true;
       _remote.current.base = true;
       dbRef.current.set(dbRef.current.ref('taif/base'), {
         date: baseDate,
