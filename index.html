@@ -454,21 +454,101 @@ insertRow({ actor: actor, action: 'تعديل عملة', target: c.name + ' (' +
 </script>
 
 <script>
-// PhaseB: guard write to taif/base outside midnight
+// PhaseB: Smart Guard v5 — client-only daily base snapshot (no RPC), lock then toast
 const origSetB = window.$db && window.$db.set ? window.$db.set.bind(window.$db) : null;
-if(origSetB){
-  window.$db.set = async function(refOrPath,value){
-    try{
-      var key = typeof refOrPath==='string'?refOrPath:(refOrPath&&refOrPath.key);
-      if(key==='taif/base'){
-        var now=new Date(); if(!(now.getHours()===0 && now.getMinutes()===0)){
-          console.warn('⛔ Attempt to modify taif/base outside midnight blocked');
-          try{ window.Log && window.Log.logEvent && window.Log.logEvent('resetBase', 'مرفوض — خارج منتصف الليل', 'system'); }catch(_){}
+if (origSetB) {
+  window.$db.set = async function(refOrPath, value) {
+    try {
+      const key = typeof refOrPath === "string" ? refOrPath : (refOrPath && refOrPath.key);
+      if (key === "taif/base") {
+        console.info("🧭 SmartGuard v5: preparing daily base snapshot...");
+        // 1) Compute today's date (local) — no RPC dependency
+        const d = new Date();
+        const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+        // 2) If lock exists, block
+        const supa = window.supabase.createClient(
+          "https://ibbtgjheqdgcacmcbpaq.supabase.co",
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImliYnRnamhlcWRnY2FjbWNicGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjkwMDQsImV4cCI6MjA3NTY0NTAwNH0.ymJHT9Qt7hFCPxTKHLexfoQ4mqo4igbCTu5mHjMgEHY"
+        );
+        const lockKey = `locks/base-${today}`;
+        try {
+          const { data:lockRow } = await supa.from("app_state").select("key").eq("key", lockKey).maybeSingle();
+          if (lockRow && lockRow.key) {
+            console.warn(`⛔ SmartGuard v5: lock exists for ${today} — skip`);
+            try { window.Log && window.Log.logEvent && window.Log.logEvent('resetBase', `مرفوض — تم القفل بتاريخ ${today}`, 'system'); } catch (_) {}
+            return;
+          }
+        } catch (e) { /* ignore and continue */ }
+
+        // 3) Build base snapshot from taif/data stored in app_state
+        let list = [];
+        try {
+          const { data } = await supa.from("app_state").select("value").eq("key","taif/data").maybeSingle();
+          if (data && data.value) list = data.value;
+        } catch (e) { /* ignore */ }
+
+        // Fallback: if still empty, try pulling from localStorage cache if present
+        if (!Array.isArray(list) || list.length === 0) {
+          try {
+            const snap = JSON.parse(localStorage.getItem("taif:cache")||"null");
+            if (snap && Array.isArray(snap.data)) list = snap.data;
+          } catch(_) {}
+        }
+
+        if (!Array.isArray(list) || list.length === 0) {
+          console.error("❌ SmartGuard v5: cannot read taif/data to make a snapshot — abort");
           return;
         }
+
+        const toNum = (v)=> +v || 0;
+        const usd = list.find(r=>r && r.code==="USD") || { buy:0, sell:0 };
+        const usdSell = toNum(usd.sell);
+        if (!(usdSell > 0)) {
+          console.error("❌ SmartGuard v5: USD sell is not valid — abort");
+          return;
+        }
+        const base = {};
+        for (const r of list) {
+          if (!r || !r.code) continue;
+          if (r.code === "USD") { base[r.code] = Math.round(usdSell); continue; }
+          const rs = toNum(r.ratioSell) > 0 ? toNum(r.ratioSell) : 1;
+          const method = (r.method === "divide") ? "divide" : "multiply";
+          let sell=0;
+          if (method === "divide") sell = Math.round(usdSell / rs);
+          else sell = Math.round(usdSell * rs);
+          base[r.code] = sell;
+        }
+        const outVal = { date: today, base };
+
+        // 4) Write taif/base ourselves with the computed snapshot
+        await origSetB(refOrPath, outVal);
+        try { window.Log && window.Log.logEvent && window.Log.logEvent('resetBase', `تم تحديث الإغلاق ليوم ${today}`, 'system'); } catch (_) {}
+
+        // 5) Create lock
+        try {
+          await supa.from("app_state").upsert([{ key: lockKey, value: { at: Date.now() } }], { onConflict: "key" });
+          console.info(`🔒 SmartGuard v5: lock ${lockKey} created.`);
+        } catch (e) { console.warn("⚠️ SmartGuard v5: lock upsert failed:", e); }
+
+        // 6) Visual toast feedback (vanilla)
+        try {
+          const wrap = document.createElement('div');
+          wrap.setAttribute('dir','rtl');
+          wrap.style.cssText = "position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483647";
+          const bubble = document.createElement('div');
+          bubble.textContent = `🔒 تم قفل سعر الإغلاق وتحديث الأساس لليوم (${today})`;
+          bubble.style.cssText = "background:#0f172acc;color:#fff;border-radius:14px;padding:10px 16px;font:600 14px/1.3 system-ui,Segoe UI,Roboto,Tahoma;box-shadow:0 8px 24px rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);";
+          wrap.appendChild(bubble); document.body.appendChild(wrap);
+          setTimeout(()=>{ bubble.style.opacity="0"; bubble.style.transition="opacity .45s ease"; }, 1400);
+        } catch(_) {}
+
+        return; // important: we already wrote the snapshot
       }
-    }catch(_){}
-    return origSetB(refOrPath,value);
+    } catch (err) {
+      console.error("❌ SmartGuard v5 error:", err);
+    }
+    return origSetB(refOrPath, value);
   };
 }
 </script>
@@ -1602,6 +1682,32 @@ function App() {
     return null;
   });
   const [loginUser, setLoginUser] = useState('');
+
+  // 🕓 Session keep-alive: refresh lock every 10 minutes
+  React.useEffect(() => {
+    if (!currentUser) return;
+    const me = currentUser.username;
+    const deviceId = localStorage.getItem('taif:device_id');
+    const token = localStorage.getItem('taif:session_token');
+    const refresh = async () => {
+      try {
+        await window.$db.set(window.$db.ref(`taif/session/${me}`), {
+          deviceId,
+          token,
+          ua: navigator.userAgent,
+          lockedAt: Date.now(),
+          lastSeen: Date.now()
+        });
+        console.info('🔁 Session refreshed for', me);
+      } catch (err) {
+        console.warn('⚠️ Failed to refresh session:', err);
+      }
+    };
+    refresh(); // immediately on load
+    const interval = setInterval(refresh, 1000 * 60 * 10); // every 10 min
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   const [loginPass, setLoginPass] = useState('');
   const [loginErr, setLoginErr] = useState('');
   const [loginModalOpen, setLoginModalOpen] = useState(false);
