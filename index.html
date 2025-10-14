@@ -2236,6 +2236,17 @@ function App() {
   // local defaults back up to the server. This flag is set when a valid
   // array is observed from Supabase and remains false otherwise.
   const hasRemoteData = useRef(false);
+  // Tracks if we have ever seen data from the server. This allows us to
+  // distinguish between the initial case where no remote data exists (fresh
+  // deployment) and the case where remote data disappears unexpectedly. If
+  // data existed before and then vanishes, we will restore it from local
+  // state instead of leaving the database empty.
+  const hadRemoteDataBefore = useRef(false);
+  // Track whether there is a remote title present. Without a remote title,
+  // pushing the local default title would overwrite server state and make
+  // clients fall back to the default again. This flag is toggled in the
+  // title subscription below.
+  const hasRemoteTitle = useRef(false);
   const hasRemoteBase = useRef(false);
   useEffect(() => {
     try {
@@ -2529,6 +2540,7 @@ function App() {
           _remote.current.data = true;
           // mark that remote data exists so updates can be pushed
           hasRemoteData.current = true;
+          hadRemoteDataBefore.current = true;
           setData(v);
           // We intentionally do not save to local storage. Snapshots are only
           // kept in memory and will not persist across sessions.
@@ -2538,8 +2550,9 @@ function App() {
           // the default data. Instead, warn the user and leave the data list empty.
           // Mark that there is currently no remote data available.
           hasRemoteData.current = false;
-          setToast({ text: "⚠️ لا توجد بيانات في القاعدة — لن يتم رفع بيانات افتراضية", type: "warning" });
-          setData([]);
+          setToast({ text: "⚠️ لا توجد بيانات في القاعدة — سيتم الحفاظ على البيانات المحلية", type: "warning" });
+          // Do not clear the local data. If we had remote data before and it
+          // disappears unexpectedly, the autopush effect below will restore it.
         }
       });
       window.$db.onValue(window.$db.ref('taif/banner'), snap => {
@@ -2557,6 +2570,14 @@ function App() {
       window.$db.onValue(window.$db.ref('taif/title'), snap => {
         _synced.current.title = true;
         const v = snap.val();
+        // If we receive a non-empty string from the server, mark that a remote
+        // title exists. Otherwise mark as absent. This helps prevent pushing
+        // the local default title when the remote value is missing.
+        if (typeof v === 'string' && v.length > 0) {
+          hasRemoteTitle.current = true;
+        } else {
+          hasRemoteTitle.current = false;
+        }
         if (typeof v === 'string' && v !== title) {
           _remote.current.title = true;
           setTitle(v);
@@ -2707,12 +2728,17 @@ function App() {
       _remote.current.data = false;
       return;
     }
-    // Only push data back to Supabase if remote data exists. If there is no
-    // remote data, pushing an empty list would overwrite the server state and
-    // effectively delete all records. hasRemoteData is toggled in the
-    // subscription above when a valid array is observed. When it's false,
-    // skip the update.
-    if (!hasRemoteData.current) return;
+    // Only push data back to Supabase if remote data exists. When no remote
+    // data exists but we had remote data before, this means the data was
+    // removed unexpectedly (e.g., due to an external deletion). In that case,
+    // restore it by writing the current local state back to the server. If we
+    // never saw remote data (fresh deployment), skip pushing entirely.
+    if (!hasRemoteData.current) {
+      if (hadRemoteDataBefore.current && Array.isArray(data) && data.length > 0) {
+        dbRef.current.set(dbRef.current.ref('taif/data'), data);
+      }
+      return;
+    }
     dbRef.current.set(dbRef.current.ref('taif/data'), data);
   }, [data]);
   React.useEffect(() => {
@@ -2731,6 +2757,11 @@ function App() {
       _remote.current.title = false;
       return;
     }
+    // Only push title back to Supabase if there is a remote title record.
+    // Without a remote title, this would create a new record and override
+    // missing data with the local default. hasRemoteTitle is toggled in the
+    // subscription above.
+    if (!hasRemoteTitle.current) return;
     dbRef.current.set(dbRef.current.ref('taif/title'), title);
   }, [title]);
   React.useEffect(() => {
@@ -2758,7 +2789,8 @@ function App() {
       _remote.current.base = false;
       return;
     }
-    // If remote base does not exist yet, do not automatically push a new base. Only update the remote base when there is an existing remote copy.
+    // If remote base does not exist yet, do not automatically push a new base.
+    // Only update the remote base when there is an existing remote copy.
     if (!hasRemoteBase.current) {
       return;
     }
