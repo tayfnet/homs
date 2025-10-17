@@ -2247,6 +2247,11 @@ function App() {
   // clients fall back to the default again. This flag is toggled in the
   // title subscription below.
   const hasRemoteTitle = useRef(false);
+  // Track whether we have ever seen a remote base entry. This helps decide
+  // whether to restore the base if it disappears unexpectedly (after having
+  // existed before) versus skipping initial creation when no base has ever
+  // been set in the database.
+  const hadRemoteBaseBefore = useRef(false);
   const hasRemoteBase = useRef(false);
   useEffect(() => {
     try {
@@ -2270,27 +2275,51 @@ function App() {
   useEffect(() => {
     let timer;
     const schedule = () => {
-      const now = new Date();
-      const mid = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0).getTime();
-      const t = Math.max(0, mid - Date.now());
-      timer = setTimeout(() => {
-        const b = {};
-        try {
-          const tmpRows = composeRows(dataRef.current, {});
-          tmpRows.forEach(r => {
-            b[r.code] = r.sell;
-          });
-        } catch (_) {}
-        setBase(b);
-        const d = today();
-        setBaseDate(d);
-        saveSnapshot({
-          base: b,
-          baseDate: d
-        });
-        _synced.current.base = true;
-        schedule();
-      }, t);
+       const now = new Date();
+       // Compute next run at 18:00 local time (6 PM). If it's already past 18:00,
+       // schedule for tomorrow at 18:00. This ensures the closing price is
+       // recorded in the evening when users are still online.
+       let nextRun = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0);
+       if (nextRun.getTime() <= now.getTime()) {
+         // If current time is after 18:00, schedule for the same time tomorrow
+         nextRun.setDate(nextRun.getDate() + 1);
+       }
+       const t = Math.max(0, nextRun.getTime() - now.getTime());
+       timer = setTimeout(() => {
+         const b = {};
+         try {
+           const tmpRows = composeRows(dataRef.current, {});
+           tmpRows.forEach(r => {
+             b[r.code] = r.sell;
+           });
+         } catch (_) {}
+         // Set local base and date for the new day
+         setBase(b);
+         const d = today();
+         setBaseDate(d);
+         saveSnapshot({
+           base: b,
+           baseDate: d
+         });
+         _synced.current.base = true;
+         // Immediately persist the new base to Supabase.
+         // Even if a remote base does not exist yet, writing here allows
+         // the server-side lock mechanism (SmartGuard v5 hook) to handle
+         // deduplication and prevent duplicate writes. This ensures that
+         // a daily closing price is always recorded in the database.
+         try {
+           if (window.$db && online) {
+             // Mark this write as originating locally so that onValue
+             // listeners don’t treat it as a remote change.
+             _remote.current.base = true;
+             window.$db.set(window.$db.ref('taif/base'), {
+               date: d,
+               base: b
+             });
+           }
+         } catch (_) {}
+         schedule();
+       }, t);
     };
     schedule();
     return () => clearTimeout(timer);
@@ -2653,11 +2682,23 @@ function App() {
           _remote.current.base = true;
           setBase(newBase);
           setBaseDate(newDate);
-          saveSnapshot({
-            base: newBase,
-            baseDate: newDate
-          });
-          return;
+           saveSnapshot({
+             base: newBase,
+             baseDate: newDate
+           });
+           // Persist the newly computed base to Supabase so that other clients
+           // immediately see a closing price. Mark as remote write to avoid
+           // triggering the snapshot logic again. Use the same date and base.
+           try {
+             _remote.current.base = true;
+             // Use $db.set instead of dbRef.set so that the SmartGuard v5 hook
+             // runs and creates a lock entry (locks/base-YYYY-MM-DD).
+             window.$db.set(window.$db.ref('taif/base'), {
+               date: newDate,
+               base: newBase
+             });
+           } catch (_) {}
+           return;
         }
         const cleaned = {};
         try {
@@ -2672,6 +2713,7 @@ function App() {
         const remoteDate = v.date;
         const localDate = baseDateRef.current;
         hasRemoteBase.current = true;
+        hadRemoteBaseBefore.current = true;
         if (!localDate || localDate !== remoteDate) {
           _remote.current.base = true;
           setBase(cleaned);
@@ -2789,19 +2831,67 @@ function App() {
       _remote.current.base = false;
       return;
     }
-    // If remote base does not exist yet, do not automatically push a new base.
-    // Only update the remote base when there is an existing remote copy.
+    // If remote base does not exist, decide whether to restore it. If we have
+    // seen a remote base before (hadRemoteBaseBefore) but it is now missing,
+    // restore it by writing the current base back to the database. Otherwise,
+    // skip pushing the base when it has never been created (fresh install).
     if (!hasRemoteBase.current) {
+      if (hadRemoteBaseBefore.current) {
+        try {
+          _remote.current.base = true;
+          window.$db.set(window.$db.ref('taif/base'), {
+            date: baseDate,
+            base
+          });
+        } catch (_) {}
+      }
       return;
     }
     try {
       _remote.current.base = true;
-      dbRef.current.set(dbRef.current.ref('taif/base'), {
+      window.$db.set(window.$db.ref('taif/base'), {
         date: baseDate,
         base
       });
     } catch (_) {}
   }, [base, baseDate]);
+
+  // -----------------------------------------------------------------------------
+  // Ensure a daily closing price is recorded even if no client was online at
+  // midnight. When the application loads or when the data updates, check
+  // whether the stored base date matches today. If not, compute a new base
+  // snapshot from the current data and immediately persist it to Supabase.
+  // The SmartGuard v5 lock mechanism will prevent duplicate writes if another
+  // client has already recorded the closing price.
+  useEffect(() => {
+    if (!window.$db || !online) return;
+    // If there's no data, we cannot compute a base.
+    if (!Array.isArray(data) || data.length === 0) return;
+    const todayStr = today();
+    const currentBaseDate = baseDateRef.current;
+    if (!currentBaseDate || currentBaseDate !== todayStr) {
+      const b = {};
+      try {
+        const tmpRows = composeRows(dataRef.current, {});
+        tmpRows.forEach(r => {
+          b[r.code] = r.sell;
+        });
+      } catch (_) {}
+      // Update local base and date
+      setBase(b);
+      setBaseDate(todayStr);
+      saveSnapshot({ base: b, baseDate: todayStr });
+      _synced.current.base = true;
+      // Persist to Supabase
+      try {
+        _remote.current.base = true;
+        window.$db.set(window.$db.ref('taif/base'), {
+          date: todayStr,
+          base: b
+        });
+      } catch (_) {}
+    }
+  }, [data, online]);
   if (!currentUser) {
     return React.createElement("div", {
       className: "min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-indigo-700 via-purple-600 to-pink-600 p-4"
