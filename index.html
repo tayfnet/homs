@@ -1192,13 +1192,13 @@ const calcPrice = (row, usd) => {
   const sellRatio = rawSell > 0 ? rawSell : 1;
   if (row.method === "divide") {
     return {
-      buy: Math.round(usd.buy / buyRatio),
-      sell: Math.round(usd.sell / sellRatio)
+      buy: +(usd.buy / buyRatio).toFixed(2),
+      sell: +(usd.sell / sellRatio).toFixed(2)
     };
   }
   return {
-    buy: Math.round(usd.buy * buyRatio),
-    sell: Math.round(usd.sell * sellRatio)
+    buy: +(usd.buy * buyRatio).toFixed(2),
+    sell: +(usd.sell * sellRatio).toFixed(2)
   };
 };
 const composeRows = (data, base) => {
