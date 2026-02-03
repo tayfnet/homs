@@ -189,8 +189,8 @@ color-scheme:light;--firstcol-pr:32px}*{box-sizing:border-box}html,body{height:1
 </head><body id="body" class="min-h-screen text-gray-900"><div id="bgfix" class="bg-fixed-gradient bg-gradient-to-tr from-cyan-200 via-white to-cyan-200"></div><div id="root"></div><script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script><script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script>
 (function(){
-  const SUPABASE_URL = "https://ibbtgjheqdgcacmcbpaq.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImliYnRnamhlcWRnY2FjbWNicGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjkwMDQsImV4cCI6MjA3NTY0NTAwNH0.ymJHT9Qt7hFCPxTKHLexfoQ4mqo4igbCTu5mHjMgEHY";
+  const SUPABASE_URL = "https://krgkaihtjuzaokgrjhrz.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyZ2thaWh0anV6YW9rZ3JqaHJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDE2MzEsImV4cCI6MjA4NTY3NzYzMX0.f8JdxvcVACLL6nzYnPlRmCdSUSkft87NcAq6n5JVh2c";
   // Reduce realtime events per second for better performance
   const client = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     // The original config requested up to 10 events per second from Supabase's realtime service.
@@ -468,8 +468,8 @@ if (origSetB) {
 
         // 2) If lock exists, block
         const supa = window.supabase.createClient(
-          "https://ibbtgjheqdgcacmcbpaq.supabase.co",
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImliYnRnamhlcWRnY2FjbWNicGFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwNjkwMDQsImV4cCI6MjA3NTY0NTAwNH0.ymJHT9Qt7hFCPxTKHLexfoQ4mqo4igbCTu5mHjMgEHY"
+          "https://krgkaihtjuzaokgrjhrz.supabase.co",
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyZ2thaWh0anV6YW9rZ3JqaHJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMDE2MzEsImV4cCI6MjA4NTY3NzYzMX0.f8JdxvcVACLL6nzYnPlRmCdSUSkft87NcAq6n5JVh2c"
         );
         const lockKey = `locks/base-${today}`;
         try {
