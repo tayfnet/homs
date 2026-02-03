@@ -835,7 +835,7 @@ const DEFAULT_DATA = [{
   flag: "🇺🇸",
   icon: "USD",
   code: "USD",
-  name: "الدولار مقابل السوري",
+  name: "الدولار الأمريكي مقابل السوري",
   buy: 11300,
   sell: 11400,
   ratioBuy: 1,
@@ -1186,22 +1186,19 @@ const calcPrice = (row, usd) => {
       sell: usd.sell
     };
   }
-
   const rawBuy = toNum(row.ratioBuy);
   const rawSell = toNum(row.ratioSell);
   const buyRatio = rawBuy > 0 ? rawBuy : 1;
   const sellRatio = rawSell > 0 ? rawSell : 1;
-
   if (row.method === "divide") {
     return {
-      buy: Math.floor(usd.buy / buyRatio),
-      sell: Math.floor(usd.sell / sellRatio)
+      buy: +(usd.buy / buyRatio).toFixed(2),
+      sell: +(usd.sell / sellRatio).toFixed(2)
     };
   }
-
   return {
-    buy: Math.floor(usd.buy * buyRatio),
-    sell: Math.floor(usd.sell * sellRatio)
+    buy: +(usd.buy * buyRatio).toFixed(2),
+    sell: +(usd.sell * sellRatio).toFixed(2)
   };
 };
 const composeRows = (data, base) => {
