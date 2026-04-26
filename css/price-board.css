@@ -1,0 +1,1535 @@
+/* TAIF Public Price Board — standalone visual clone of the internal price screen. */
+:root{
+  --ink:#0b1220;
+  --taif-font-family:Tahoma, Arial, system-ui, sans-serif;
+  --taif-scrollbar-track:transparent;
+  --taif-scrollbar-thumb:rgba(15,23,42,.22);
+  --taif-scrollbar-thumb-hover:rgba(15,23,42,.34);
+  --taif-control-text-shift:.9px;
+}
+*{box-sizing:border-box;}
+html,body{width:100%;height:100%;margin:0;}
+body{
+  direction:rtl;
+  overflow:hidden;
+  color:var(--ink);
+  background:#ffffff;
+  font-family:var(--taif-font-family);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:geometricPrecision;
+}
+.taif-public-price-shell{
+  width:100vw;
+  height:100vh;
+  min-width:0;
+  min-height:0;
+  background:#ffffff;
+  overflow:hidden;
+}
+.taif-public-price-shell
+
+/* Current internal desktop price-screen stylesheet cloned for public board. */
+.panel[data-view="price-screen"]{
+  overflow:hidden;
+  background:linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+}
+
+.panel[data-view="price-screen"]::before{
+  display:none;
+}
+
+.price-screen{
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  padding:0;
+  color:var(--ink);
+  min-height:0;
+  background:transparent;
+}
+
+.price-screen__board-head,
+.price-screen__row{
+  display:grid;
+  grid-template-columns:
+    92px
+    minmax(126px, .74fr)
+    minmax(128px, .97fr)
+    53px
+    minmax(128px, .97fr)
+    76px
+    minmax(135px, 1.03fr)
+    53px
+    minmax(135px, 1.03fr);
+  align-items:center;
+  gap:9px;
+}
+
+.price-screen__board-head{
+  flex:0 0 auto;
+  padding:4px 14px 2px;
+  color:#3b4b63;
+  font:700 11px/1.15 var(--taif-font-family);
+}
+
+.price-screen__board-head > *{
+  min-width:0;
+  text-align:center;
+}
+
+.price-screen__board-head-name{
+  text-align:right;
+}
+
+.price-screen__board-head-name .taif-singleline-fit{
+  text-align:right;
+}
+
+.price-screen__board-body{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  padding:0 4px;
+  box-sizing:border-box;
+  scrollbar-width:thin;
+  scrollbar-color:var(--taif-scrollbar-thumb) var(--taif-scrollbar-track);
+  scrollbar-gutter:stable both-edges;
+  background:linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+}
+
+.price-screen__board-body::-webkit-scrollbar{
+  width:8px;
+  height:8px;
+}
+
+.price-screen__board-body::-webkit-scrollbar-track{
+  background:var(--taif-scrollbar-track);
+  border-radius:10px;
+}
+
+.price-screen__board-body::-webkit-scrollbar-thumb{
+  border-radius:10px;
+  background:var(--taif-scrollbar-thumb);
+  border:1px solid transparent;
+  background-clip:padding-box;
+}
+
+.price-screen__list{
+  display:grid;
+  gap:6px;
+}
+
+.price-screen__row{
+  padding:7px 12px 7px 10px;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:0;
+  overflow:hidden;
+  background:linear-gradient(180deg, rgba(255,255,255,.97) 0%, rgba(255,255,255,.94) 100%);
+  min-height:56px;
+  box-shadow:0 1px 0 rgba(255,255,255,.96) inset;
+  transition:transform .12s ease, border-color .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+
+.price-screen__row > *{
+  min-width:0;
+}
+
+.price-screen__row:hover{
+  transform:translateY(-1px);
+  border-color:rgba(37,99,235,.20);
+  box-shadow:0 10px 22px rgba(37,99,235,.07);
+}
+
+.price-screen__row--counterpart{
+  cursor:pointer;
+}
+
+.price-screen__row--counterpart:hover{
+  border-color:rgba(15,23,42,.18);
+  box-shadow:0 10px 22px rgba(15,23,42,.08);
+}
+
+.price-screen__row--counterpart:focus-visible{
+  outline:2px solid #111827;
+  outline-offset:2px;
+  border-color:#111827;
+}
+
+.price-screen__row--counterpart.is-opening{
+  opacity:.72;
+  pointer-events:none;
+}
+
+.price-screen__row--usd{
+  background:linear-gradient(90deg, rgba(245,249,255,.98) 0%, rgba(255,255,255,.94) 100%);
+  border-color:rgba(37,99,235,.18);
+}
+
+.price-screen__code,
+.price-screen__num{
+  height:36px;
+  border-radius:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font:700 13px/1 var(--taif-font-family);
+}
+
+.price-screen__code{
+  width:100%;
+  border:1px solid rgba(15,23,42,.08);
+  background:rgba(15,23,42,.05);
+  letter-spacing:.35px;
+}
+
+.price-screen__name{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:flex-end;
+  gap:0;
+}
+
+.price-screen__pair-badge{
+  min-height:20px;
+  width:100%;
+  max-width:76px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 8px;
+  border-radius:10px;
+  border:1px solid rgba(59,130,246,.14);
+  background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(239,246,255,.94));
+  color:#1d4ed8;
+  direction:ltr;
+  white-space:nowrap;
+  font:700 11px/1 var(--taif-font-family);
+}
+
+.price-screen__pair-col{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  padding-inline:0;
+}
+
+.price-screen__name-main{
+  width:100%;
+  font:900 18.4px/1.06 var(--taif-font-family);
+  color:var(--ink);
+  text-align:right;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+
+.price-screen__name-sub{
+  display:none !important;
+}
+
+.price-screen__num{
+  width:calc(100% - 36px);
+  max-width:calc(100% - 36px);
+  height:38px;
+  border-radius:8px;
+  justify-self:center;
+  border:1px solid rgba(15,23,42,.07);
+  background:rgba(15,23,42,.04);
+  font-size:18px;
+  font-weight:900;
+  font-variant-numeric:tabular-nums;
+  padding:0 8px;
+}
+
+.price-screen__num--buy,
+.price-screen__num--dollar-buy{
+  background:linear-gradient(180deg, #29c861 0%, #19ab4d 100%);
+  border-color:#17994a;
+  color:#ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.18),
+    0 6px 14px rgba(25,171,77,.14);
+  text-shadow:0 1px 1px rgba(0,0,0,.22);
+}
+
+.price-screen__num--sell,
+.price-screen__num--dollar-sell{
+  background:linear-gradient(180deg, #f54040 0%, #c81820 100%);
+  border-color:#b91820;
+  color:#ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.16),
+    0 6px 14px rgba(200,24,32,.13);
+  text-shadow:0 1px 1px rgba(0,0,0,.22);
+}
+
+.price-screen__empty{
+  min-height:220px;
+  display:grid;
+  place-items:center;
+  text-align:center;
+  padding:18px;
+  color:rgba(15,23,42,.62);
+  font:700 14px/1.8 var(--taif-font-family);
+}
+
+@media (max-width: 980px){
+  .price-screen{
+    padding:4px;
+  }
+
+  .price-screen__board-head,
+  .price-screen__row{
+    min-width:1060px;
+  }
+}
+
+.price-screen--display-only{
+  justify-content:flex-start;
+}
+
+.price-screen__flag,
+.price-screen__usd-flag{
+  width:46px;
+  height:46px;
+  justify-self:center;
+}
+
+/* Price screen only: USD pair cells for pricing/zero-drop rows show a deliberate dash only. */
+.price-screen__row--usd-dash .price-screen__num--dollar-buy,
+.price-screen__row--usd-dash .price-screen__num--dollar-sell{
+  overflow:hidden;
+}
+
+.price-screen__usd-dash{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:0;
+  max-width:100%;
+  direction:ltr;
+  white-space:nowrap;
+}
+
+.price-screen__usd-dash-text{
+  font:900 18px/1 var(--taif-font-family);
+  letter-spacing:.02em;
+  color:#fff;
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-dash-text{
+    font-size:13px;
+  }
+}
+
+
+/* TAIF price screen header bar polish */
+.price-screen__board-head{
+  margin-bottom:6px;
+  padding:7px 14px;
+  min-height:40px;
+  border:1px solid rgba(148, 163, 184, .34);
+  border-radius:0;
+  background:linear-gradient(180deg, #eef2f6 0%, #e4e9f0 100%);
+  color:#445468;
+  font-size:12px;
+  font-weight:800;
+  box-sizing:border-box;
+  box-shadow:0 1px 0 rgba(255,255,255,.82) inset;
+}
+
+
+/* Current internal mobile price-screen stylesheet cloned and re-scoped for public board. */
+/* TAIF V5 — consolidated mobile stylesheet. Source order preserved. */
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"]{
+    overflow:auto !important;
+    overflow-x:hidden !important;
+    -webkit-overflow-scrolling:touch !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen{
+    width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    padding:0 !important;
+    gap:0 !important;
+    overflow:hidden !important;
+    background:transparent !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-head{
+    display:none !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-body,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__list{
+    width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) !important;
+    justify-items:stretch !important;
+    align-items:stretch !important;
+    gap:4px !important;
+    padding:0 !important;
+    margin:0 !important;
+    overflow-x:hidden !important;
+    overflow-y:visible !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-body{
+    background:linear-gradient(180deg, #ffffff 0%, #fbfcff 100%) !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    display:grid !important;
+    
+    grid-template-columns:
+      minmax(34px,.56fr)
+      minmax(68px,1.42fr)
+      minmax(41px,.66fr)
+      minmax(24px,.30fr)
+      minmax(41px,.66fr)
+      minmax(41px,.66fr)
+      minmax(24px,.30fr)
+      minmax(41px,.66fr) !important;
+    width:100% !important;
+    min-width:0 !important;
+    max-width:100% !important;
+    min-height:40px !important;
+    gap:2px !important;
+    margin:0 !important;
+    padding:2px !important;
+    border-radius:10px !important;
+    border:1px solid rgba(148,163,184,.18) !important;
+    background:linear-gradient(180deg, rgba(255,255,255,.97) 0%, rgba(255,255,255,.94) 100%) !important;
+    box-shadow:0 2px 8px rgba(15,23,42,.04) !important;
+    overflow:hidden !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row--usd{
+    background:linear-gradient(180deg, rgba(247,251,255,.98) 0%, rgba(255,255,255,.94) 100%) !important;
+    border-color:rgba(37,99,235,.16) !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    min-width:0 !important;
+    width:100% !important;
+    max-width:100% !important;
+    height:34px !important;
+    min-height:34px !important;
+    max-height:34px !important;
+    padding:0 2px !important;
+    margin:0 !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    text-align:center !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    line-height:1 !important;
+    border-radius:7px !important;
+    box-sizing:border-box !important;
+  }
+
+  
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code{grid-column:1 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{grid-column:2 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--buy{grid-column:3 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag{grid-column:4 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--sell{grid-column:5 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-buy{grid-column:6 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag{grid-column:7 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-sell{grid-column:8 !important;}
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__pair-col,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__pair-badge{
+    display:none !important;
+    width:0 !important;
+    min-width:0 !important;
+    max-width:0 !important;
+    padding:0 !important;
+    margin:0 !important;
+    border:0 !important;
+    overflow:hidden !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *::before{
+    display:none !important;
+    content:none !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code{
+    font-size:10px !important;
+    font-weight:900 !important;
+    letter-spacing:0 !important;
+    background:linear-gradient(180deg,#f8fafc,#eef2f7) !important;
+    border:1px solid rgba(15,23,42,.10) !important;
+    color:#1f2937 !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{
+    align-items:center !important;
+    justify-content:flex-end !important;
+    padding-inline:4px !important;
+    background:#fff !important;
+    border:1px solid rgba(148,163,184,.16) !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    width:100% !important;
+    max-width:100% !important;
+    font-size:10.4px !important;
+    font-weight:800 !important;
+    line-height:1 !important;
+    color:#0f172a !important;
+    text-align:right !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:10px !important;
+    font-weight:900 !important;
+    font-variant-numeric:tabular-nums !important;
+    padding:0 2px !important;
+    border-width:1px !important;
+    border-style:solid !important;
+    text-overflow:ellipsis !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--buy,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-buy{
+    border-color:#17994a !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14) !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--sell,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-sell{
+    border-color:#b91820 !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.12) !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag{
+    padding:0 !important;
+    border:1px solid rgba(148,163,184,.16) !important;
+    background:#fff !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag-image,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag .price-screen__flag-image{
+    width:18px !important;
+    height:18px !important;
+    min-width:18px !important;
+    min-height:18px !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen{
+    padding:3px 1px 6px !important;
+    gap:3px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-body,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__list{
+    gap:3px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    grid-template-columns:
+      minmax(31px,.54fr)
+      minmax(58px,1.34fr)
+      minmax(37px,.62fr)
+      minmax(22px,.28fr)
+      minmax(37px,.62fr)
+      minmax(37px,.62fr)
+      minmax(22px,.28fr)
+      minmax(37px,.62fr) !important;
+    min-height:37px !important;
+    padding:2px !important;
+    gap:2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    height:31px !important;
+    min-height:31px !important;
+    max-height:31px !important;
+    border-radius:6px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:9.2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    font-size:9.6px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag-image,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag .price-screen__flag-image{
+    width:17px !important;
+    height:17px !important;
+    min-width:17px !important;
+    min-height:17px !important;
+  }
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"]{
+    overflow:hidden !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen{
+    width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    padding:2px 0 6px !important;
+    gap:3px !important;
+    overflow:hidden !important;
+    box-sizing:border-box !important;
+  }
+
+  
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-body,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__list{
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) !important;
+    justify-items:stretch !important;
+    align-items:stretch !important;
+    width:calc(100% + 8px) !important;
+    max-width:calc(100% + 8px) !important;
+    min-width:0 !important;
+    margin-inline:-4px !important;
+    padding:0 2px !important;
+    gap:3px !important;
+    overflow:hidden !important;
+    box-sizing:border-box !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    display:grid !important;
+    grid-template-columns:
+      minmax(36px,.56fr)
+      minmax(74px,1.50fr)
+      minmax(44px,.72fr)
+      minmax(25px,.34fr)
+      minmax(44px,.72fr)
+      minmax(44px,.72fr)
+      minmax(25px,.34fr)
+      minmax(44px,.72fr) !important;
+    width:100% !important;
+    inline-size:100% !important;
+    min-width:0 !important;
+    max-width:100% !important;
+    justify-self:stretch !important;
+    align-self:stretch !important;
+    min-height:40px !important;
+    padding:2px !important;
+    gap:2px !important;
+    margin:0 !important;
+    box-sizing:border-box !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    box-sizing:border-box !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{
+    padding-inline:4px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    width:100% !important;
+    max-width:100% !important;
+    font-size:10.5px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:10.2px !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen{
+    padding:1px 0 6px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-body,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__list{
+    width:calc(100% + 10px) !important;
+    max-width:calc(100% + 10px) !important;
+    margin-inline:-5px !important;
+    padding:0 1px !important;
+    gap:2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    grid-template-columns:
+      minmax(34px,.56fr)
+      minmax(68px,1.45fr)
+      minmax(41px,.70fr)
+      minmax(23px,.32fr)
+      minmax(41px,.70fr)
+      minmax(41px,.70fr)
+      minmax(23px,.32fr)
+      minmax(41px,.70fr) !important;
+    min-height:37px !important;
+    padding:2px 1px !important;
+    gap:2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    height:31px !important;
+    min-height:31px !important;
+    max-height:31px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    font-size:9.7px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:9.4px !important;
+  }
+}
+
+@media (max-width: 860px){
+  
+  body.taif-mobile-mode .shell{
+    --side:0px !important;
+    grid-template-columns:minmax(0, 1fr) 0px !important;
+  }
+
+  body.taif-mobile-mode .content{
+    grid-column:1 / -1 !important;
+    width:100vw !important;
+    max-width:100vw !important;
+    min-width:0 !important;
+    padding-inline:0 !important;
+    overflow:hidden !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"]{
+    width:100vw !important;
+    max-width:100vw !important;
+    min-width:0 !important;
+    margin:0 !important;
+    border-left:0 !important;
+    border-right:0 !important;
+    overflow:hidden !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen{
+    width:100vw !important;
+    max-width:100vw !important;
+    min-width:0 !important;
+    margin:0 !important;
+    padding:2px 0 6px !important;
+    gap:2px !important;
+    overflow:hidden !important;
+    box-sizing:border-box !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-head{
+    display:none !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-body,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__list{
+    width:100vw !important;
+    max-width:100vw !important;
+    min-width:0 !important;
+    margin:0 !important;
+    padding:0 1px !important;
+    gap:2px !important;
+    display:grid !important;
+    grid-template-columns:minmax(0, 1fr) !important;
+    justify-items:stretch !important;
+    overflow:hidden !important;
+    box-sizing:border-box !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__pair-col,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__pair-badge{
+    display:none !important;
+    width:0 !important;
+    min-width:0 !important;
+    max-width:0 !important;
+    padding:0 !important;
+    margin:0 !important;
+    border:0 !important;
+    overflow:hidden !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    display:grid !important;
+    grid-template-columns:
+      minmax(36px, .52fr)
+      minmax(90px, 1.65fr)
+      minmax(50px, .76fr)
+      minmax(27px, .32fr)
+      minmax(50px, .76fr)
+      minmax(50px, .76fr)
+      minmax(27px, .32fr)
+      minmax(50px, .76fr) !important;
+    width:100% !important;
+    inline-size:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    justify-self:stretch !important;
+    min-height:40px !important;
+    height:auto !important;
+    margin:0 !important;
+    padding:2px 1px !important;
+    gap:2px !important;
+    border-radius:10px !important;
+    overflow:hidden !important;
+    box-sizing:border-box !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    height:34px !important;
+    min-height:34px !important;
+    max-height:34px !important;
+    margin:0 !important;
+    padding:0 2px !important;
+    border-radius:7px !important;
+    box-sizing:border-box !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    overflow:hidden !important;
+    white-space:nowrap !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *::before{
+    display:none !important;
+    content:none !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code{grid-column:1 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{grid-column:2 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--buy{grid-column:3 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag{grid-column:4 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--sell{grid-column:5 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-buy{grid-column:6 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag{grid-column:7 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-sell{grid-column:8 !important;}
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{
+    justify-content:flex-end !important;
+    padding-inline:4px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    width:100% !important;
+    max-width:100% !important;
+    font-size:10.4px !important;
+    line-height:1 !important;
+    text-align:right !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:10.1px !important;
+    font-weight:900 !important;
+    line-height:1 !important;
+    text-overflow:ellipsis !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag-image,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag .price-screen__flag-image{
+    width:18px !important;
+    height:18px !important;
+    min-width:18px !important;
+    min-height:18px !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen{
+    padding:1px 0 6px !important;
+    gap:2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-body,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__list{
+    padding:0 !important;
+    gap:2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    grid-template-columns:
+      minmax(35px, .54fr)
+      minmax(84px, 1.60fr)
+      minmax(47px, .76fr)
+      minmax(25px, .32fr)
+      minmax(47px, .76fr)
+      minmax(47px, .76fr)
+      minmax(25px, .32fr)
+      minmax(47px, .76fr) !important;
+    min-height:38px !important;
+    gap:2px !important;
+    padding:2px 1px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    height:32px !important;
+    min-height:32px !important;
+    max-height:32px !important;
+    border-radius:6px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    font-size:9.7px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:9.4px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag-image,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag .price-screen__flag-image{
+    width:17px !important;
+    height:17px !important;
+    min-width:17px !important;
+    min-height:17px !important;
+  }
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag{
+    background:transparent !important;
+    border:none !important;
+    box-shadow:none !important;
+    outline:none !important;
+    border-radius:0 !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{
+    padding-inline:2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag{
+    padding:0 !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag-image,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag .price-screen__flag-image{
+    filter:none !important;
+    box-shadow:none !important;
+    border:none !important;
+    background:transparent !important;
+    border-radius:0 !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{
+    padding-inline:1px !important;
+  }
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    display:grid !important;
+    grid-auto-flow:column !important;
+    grid-auto-rows:unset !important;
+    align-items:center !important;
+    grid-template-areas:none !important;
+    grid-template-columns:
+      minmax(36px,.54fr)
+      minmax(88px,1.62fr)
+      minmax(48px,.74fr)
+      minmax(24px,.30fr)
+      minmax(48px,.74fr)
+      minmax(48px,.74fr)
+      minmax(24px,.30fr)
+      minmax(48px,.74fr) !important;
+    width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    min-height:40px !important;
+    height:auto !important;
+    padding:2px 1px !important;
+    gap:2px !important;
+    margin:0 !important;
+    box-sizing:border-box !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    grid-row:1 !important;
+    align-self:center !important;
+    justify-self:stretch !important;
+    width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    height:32px !important;
+    min-height:32px !important;
+    max-height:32px !important;
+    margin:0 !important;
+    padding:0 2px !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    box-sizing:border-box !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code{grid-column:1 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{grid-column:2 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--buy{grid-column:3 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag{grid-column:4 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--sell{grid-column:5 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-buy{grid-column:6 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag{grid-column:7 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-sell{grid-column:8 !important;}
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag{
+    background:transparent !important;
+    border:none !important;
+    box-shadow:none !important;
+    border-radius:0 !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{
+    display:flex !important;
+    flex-direction:row !important;
+    align-items:center !important;
+    justify-content:flex-end !important;
+    padding-inline:2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    display:block !important;
+    width:100% !important;
+    max-width:100% !important;
+    margin:0 !important;
+    font-size:10px !important;
+    line-height:1 !important;
+    text-align:right !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    padding:0 !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag-image,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag .price-screen__flag-image{
+    width:18px !important;
+    height:18px !important;
+    min-width:18px !important;
+    min-height:18px !important;
+    max-width:18px !important;
+    max-height:18px !important;
+    display:block !important;
+    border:none !important;
+    background:transparent !important;
+    box-shadow:none !important;
+    border-radius:0 !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    grid-template-columns:
+      minmax(35px,.54fr)
+      minmax(82px,1.58fr)
+      minmax(46px,.74fr)
+      minmax(23px,.30fr)
+      minmax(46px,.74fr)
+      minmax(46px,.74fr)
+      minmax(23px,.30fr)
+      minmax(46px,.74fr) !important;
+    min-height:38px !important;
+    gap:2px !important;
+    padding:2px 1px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    height:31px !important;
+    min-height:31px !important;
+    max-height:31px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    font-size:9.6px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:9.4px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag-image,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag .price-screen__flag-image{
+    width:17px !important;
+    height:17px !important;
+    min-width:17px !important;
+    min-height:17px !important;
+    max-width:17px !important;
+    max-height:17px !important;
+  }
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    
+    grid-template-columns:
+      minmax(34px,.48fr)
+      minmax(76px,1.18fr)
+      minmax(54px,.84fr)
+      minmax(21px,.24fr)
+      minmax(54px,.84fr)
+      minmax(54px,.84fr)
+      minmax(21px,.24fr)
+      minmax(54px,.84fr) !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{
+    padding-inline:1px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    font-size:9.8px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    padding:0 3px !important;
+    font-size:10px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag-image,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag .price-screen__flag-image{
+    width:17px !important;
+    height:17px !important;
+    min-width:17px !important;
+    min-height:17px !important;
+    max-width:17px !important;
+    max-height:17px !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    
+    grid-template-columns:
+      minmax(33px,.46fr)
+      minmax(68px,1.02fr)
+      minmax(51px,.82fr)
+      minmax(20px,.22fr)
+      minmax(51px,.82fr)
+      minmax(51px,.82fr)
+      minmax(20px,.22fr)
+      minmax(51px,.82fr) !important;
+    gap:2px !important;
+    padding:2px 1px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    height:32px !important;
+    min-height:32px !important;
+    max-height:32px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:9.5px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    font-size:9.4px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag-image,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag .price-screen__flag-image{
+    width:16px !important;
+    height:16px !important;
+    min-width:16px !important;
+    min-height:16px !important;
+    max-width:16px !important;
+    max-height:16px !important;
+  }
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    grid-template-columns:
+      minmax(33px,.44fr)   
+      minmax(66px,.92fr)   
+      minmax(52px,.82fr)   
+      minmax(20px,.22fr)   
+      minmax(52px,.82fr)   
+      minmax(8px,.10fr)    
+      minmax(52px,.82fr)   
+      minmax(20px,.22fr)   
+      minmax(52px,.82fr)    !important;
+    gap:2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code{grid-column:1 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{grid-column:2 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--buy{grid-column:3 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag{grid-column:4 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--sell{grid-column:5 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-buy{grid-column:7 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag{grid-column:8 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-sell{grid-column:9 !important;}
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{
+    padding-inline:1px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    font-size:9.7px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    padding:0 3px !important;
+    font-size:9.8px !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    grid-template-columns:
+      minmax(32px,.42fr)   
+      minmax(61px,.84fr)   
+      minmax(50px,.80fr)   
+      minmax(19px,.20fr)   
+      minmax(50px,.80fr)   
+      minmax(7px,.09fr)    
+      minmax(50px,.80fr)   
+      minmax(19px,.20fr)   
+      minmax(50px,.80fr)    !important;
+    gap:2px !important;
+    padding:2px 1px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    height:32px !important;
+    min-height:32px !important;
+    max-height:32px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    font-size:9.2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:9.3px !important;
+  }
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    height:26px !important;
+    min-height:26px !important;
+    max-height:26px !important;
+    align-self:center !important;
+    line-height:1 !important;
+    
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    height:26px !important;
+    min-height:26px !important;
+    max-height:26px !important;
+    align-self:center !important;
+    line-height:1 !important;
+  }
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-body,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__list{
+    gap:6px !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-body,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__list{
+    gap:5px !important;
+  }
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--buy,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--sell,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-buy,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-sell{
+    font-size:11.1px !important;
+    line-height:1 !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--buy,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--sell,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-buy,
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-sell{
+    font-size:10.6px !important;
+    line-height:1 !important;
+  }
+}
+
+.price-screen__mobile-head{
+  display:none;
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head{
+    display:grid !important;
+    grid-template-columns:minmax(0,.99fr) minmax(0,1.49fr) minmax(0,1.45fr) !important;
+    align-items:stretch !important;
+    gap:1px !important;
+    margin:0 0 4px !important;
+    padding:0 !important;
+    background:#cfd4dc !important;
+    border:1px solid rgba(148,163,184,.38) !important;
+    border-radius:8px !important;
+    overflow:hidden !important;
+    box-shadow:0 1px 0 rgba(255,255,255,.55) inset !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head-cell{
+    min-width:0 !important;
+    min-height:34px !important;
+    padding:6px 5px !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    text-align:center !important;
+    background:#e5e7eb !important;
+    color:#475569 !important;
+    font:800 9.6px/1.18 var(--taif-font-family) !important;
+    white-space:normal !important;
+    overflow-wrap:anywhere !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head-cell--identity{
+    font-size:9.4px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head-cell--counterpart{
+    font-size:9.25px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head-cell--usd{
+    font-size:9.4px !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head{
+    grid-template-columns:minmax(0,.95fr) minmax(0,1.42fr) minmax(0,1.41fr) !important;
+    margin:0 0 4px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head-cell{
+    min-height:32px !important;
+    padding:5px 4px !important;
+    font-size:8.8px !important;
+    line-height:1.15 !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head-cell--identity{
+    font-size:8.6px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head-cell--counterpart{
+    font-size:8.45px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head-cell--usd{
+    font-size:8.55px !important;
+  }
+}
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    min-height:52px !important;
+    padding-block:8px !important;
+    align-items:center !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row > *{
+    align-self:center !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    min-height:48px !important;
+    padding-block:7px !important;
+  }
+}
+
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-body{
+    padding-inline:3px !important;
+    box-sizing:border-box !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    overflow:hidden !important;
+  }
+}
+
+/* TAIF price screen final font tune */
+
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    font-size:13.5px !important;
+    font-weight:900 !important;
+    line-height:1 !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:13px !important;
+    font-weight:900 !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name-main{
+    font-size:12.2px !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num{
+    font-size:12px !important;
+  }
+}
+
+
+/* TAIF price screen final header bar polish */
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-head{
+    margin-bottom:6px !important;
+    padding:7px 10px !important;
+    min-height:38px !important;
+    border:1px solid rgba(148, 163, 184, .34) !important;
+    border-radius:0 !important;
+    background:linear-gradient(180deg, #eef2f6 0%, #e4e9f0 100%) !important;
+    color:#445468 !important;
+    font-size:10px !important;
+    font-weight:800 !important;
+    box-sizing:border-box !important;
+    box-shadow:0 1px 0 rgba(255,255,255,.82) inset !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__board-head{
+    padding:6px 9px !important;
+    min-height:36px !important;
+    font-size:9.6px !important;
+  }
+}
+
+
+/* TAIF price screen mobile-only: remove currency code column */
+@media (max-width: 860px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    grid-template-columns:
+      minmax(86px,1.56fr)
+      minmax(41px,.66fr)
+      minmax(24px,.30fr)
+      minmax(41px,.66fr)
+      minmax(41px,.66fr)
+      minmax(24px,.30fr)
+      minmax(41px,.66fr) !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__code{
+    display:none !important;
+    width:0 !important;
+    min-width:0 !important;
+    max-width:0 !important;
+    padding:0 !important;
+    margin:0 !important;
+    border:0 !important;
+    overflow:hidden !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__name{grid-column:1 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--buy{grid-column:2 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__flag{grid-column:3 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--sell{grid-column:4 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-buy{grid-column:5 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__usd-flag{grid-column:6 !important;}
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__num--dollar-sell{grid-column:7 !important;}
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head{
+    grid-template-columns:minmax(0,1.08fr) minmax(0,1.49fr) minmax(0,1.45fr) !important;
+  }
+}
+
+@media (max-width: 430px){
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__row{
+    grid-template-columns:
+      minmax(74px,1.42fr)
+      minmax(38px,.66fr)
+      minmax(22px,.30fr)
+      minmax(38px,.66fr)
+      minmax(38px,.66fr)
+      minmax(22px,.30fr)
+      minmax(38px,.66fr) !important;
+  }
+
+  .taif-public-price-shell .panel[data-view="price-screen"] .price-screen__mobile-head{
+    grid-template-columns:minmax(0,1.02fr) minmax(0,1.42fr) minmax(0,1.41fr) !important;
+  }
+}
+
+
+/* Standalone public display guard: the external board is read-only. */
+.price-screen--display-only .price-screen__row--counterpart{
+  cursor:default;
+}
+
+.price-screen--display-only .price-screen__row--counterpart:focus-visible{
+  outline:none;
+}
