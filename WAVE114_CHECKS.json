@@ -1,0 +1,12 @@
+{
+  "index_exists": true,
+  "css_contains_shared_flag_system": true,
+  "css_contains_internal_price_screen": true,
+  "css_contains_mobile_remove_code_column": true,
+  "js_files": [
+    "config.js",
+    "price-board.js",
+    "public-price-engine.js"
+  ],
+  "flags_count": 109
+}
