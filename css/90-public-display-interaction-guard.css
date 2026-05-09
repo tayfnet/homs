@@ -1,0 +1,54 @@
+/* TAIF public display interaction guard
+   Keeps this standalone price display in kiosk/display mode:
+   - no visual text selection or copy cursor
+   - normal arrow cursor on all display text
+   - image/text dragging disabled
+*/
+html.taif-public-display-guard-enabled,
+html.taif-public-display-guard-enabled body,
+html.taif-public-display-guard-enabled body *,
+html.taif-public-display-guard-enabled .taif-public-price-app,
+html.taif-public-display-guard-enabled .taif-public-price-app *,
+html.taif-public-display-guard-enabled .taif-public-price-status,
+html.taif-public-display-guard-enabled .taif-public-price-status *{
+  -webkit-user-select:none !important;
+  -moz-user-select:none !important;
+  -ms-user-select:none !important;
+  user-select:none !important;
+  -webkit-user-drag:none !important;
+  -webkit-touch-callout:none !important;
+  caret-color:transparent !important;
+  cursor:default !important;
+}
+
+html.taif-public-display-guard-enabled img,
+html.taif-public-display-guard-enabled svg,
+html.taif-public-display-guard-enabled canvas,
+html.taif-public-display-guard-enabled picture{
+  -webkit-user-drag:none !important;
+  user-drag:none !important;
+  pointer-events:none;
+}
+
+html.taif-public-display-guard-enabled ::selection{
+  background:transparent !important;
+  color:inherit !important;
+}
+
+html.taif-public-display-guard-enabled ::-moz-selection{
+  background:transparent !important;
+  color:inherit !important;
+}
+
+html.taif-public-display-guard-enabled body{
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+
+html.taif-public-display-guard-enabled.taif-public-display-is-fullscreen,
+html.taif-public-display-guard-enabled.taif-public-display-is-fullscreen body,
+html.taif-public-display-guard-enabled.taif-public-display-is-fullscreen .taif-public-price-app{
+  width:100vw;
+  height:100vh;
+  overflow:hidden;
+}
